@@ -32,11 +32,11 @@ class CircuitBreaker:
             config: Circuit breaker configuration
         """
         self.config = config
-        self.state = CircuitBreakerState.CLOSED
+        self._state = CircuitBreakerState.CLOSED
         self.failure_count = 0
         self.success_count = 0
-        self.last_failure_time = 0
-        self.last_success_time = 0
+        self.last_failure_time = None
+        self.last_success_time = None
         self._lock = threading.RLock()
         
         # Statistics
@@ -68,7 +68,7 @@ class CircuitBreaker:
             self.total_requests += 1
             
             # Check if circuit is open
-            if self.state == CircuitBreakerState.OPEN:
+            if self._state == CircuitBreakerState.OPEN:
                 if self._should_attempt_reset():
                     self._set_half_open()
                 else:
@@ -111,7 +111,7 @@ class CircuitBreaker:
             self.total_requests += 1
             
             # Check if circuit is open
-            if self.state == CircuitBreakerState.OPEN:
+            if self._state == CircuitBreakerState.OPEN:
                 if self._should_attempt_reset():
                     self._set_half_open()
                 else:
@@ -133,11 +133,13 @@ class CircuitBreaker:
     
     def _should_attempt_reset(self) -> bool:
         """Check if enough time has passed to attempt reset."""
+        if self.last_failure_time is None:
+            return False
         return time.time() - self.last_failure_time >= self.config.recovery_timeout
     
     def _set_half_open(self):
         """Set circuit to half-open state."""
-        self.state = CircuitBreakerState.HALF_OPEN
+        self._state = CircuitBreakerState.HALF_OPEN
         self.success_count = 0
         logger.info("Circuit breaker set to HALF_OPEN")
     
@@ -147,7 +149,7 @@ class CircuitBreaker:
             self.last_success_time = time.time()
             self.total_successes += 1
             
-            if self.state == CircuitBreakerState.HALF_OPEN:
+            if self._state == CircuitBreakerState.HALF_OPEN:
                 self.success_count += 1
                 if self.success_count >= self.config.success_threshold:
                     self._set_closed()
@@ -158,47 +160,64 @@ class CircuitBreaker:
     def _on_failure(self, exception: Exception):
         """Handle failed execution."""
         with self._lock:
-            self.last_failure_time = time.time()
-            self.total_failures += 1
-            self.failure_count += 1
+            # Check if this exception should trigger the circuit breaker
+            should_trigger = should_trigger_circuit_breaker(None, exception, self.config)
             
-            logger.warning(f"Circuit breaker failure: {type(exception).__name__}: {exception}")
-            
-            if self.state == CircuitBreakerState.HALF_OPEN:
-                # Back to open state
-                self._set_open()
-            elif self.state == CircuitBreakerState.CLOSED:
-                if self.failure_count >= self.config.failure_threshold:
+            if should_trigger:
+                self.last_failure_time = time.time()
+                self.total_failures += 1
+                self.failure_count += 1
+                
+                logger.warning(f"Circuit breaker failure: {type(exception).__name__}: {exception}")
+                
+                if self._state == CircuitBreakerState.HALF_OPEN:
+                    # Back to open state
                     self._set_open()
+                elif self._state == CircuitBreakerState.CLOSED:
+                    if self.failure_count >= self.config.failure_threshold:
+                        self._set_open()
+            else:
+                # Log but don't count as failure
+                logger.info(f"Circuit breaker ignoring exception: {type(exception).__name__}: {exception}")
     
     def _set_closed(self):
         """Set circuit to closed state."""
-        self.state = CircuitBreakerState.CLOSED
+        self._state = CircuitBreakerState.CLOSED
         self.failure_count = 0
         self.success_count = 0
+        self.last_failure_time = None
+        self.last_success_time = None
         logger.info("Circuit breaker set to CLOSED")
     
     def _set_open(self):
         """Set circuit to open state."""
-        self.state = CircuitBreakerState.OPEN
+        self._state = CircuitBreakerState.OPEN
         logger.warning(f"Circuit breaker set to OPEN after {self.failure_count} failures")
     
     def is_open(self) -> bool:
         """Check if circuit is open."""
-        return self.state == CircuitBreakerState.OPEN
+        return self._state == CircuitBreakerState.OPEN
     
     def is_closed(self) -> bool:
         """Check if circuit is closed."""
-        return self.state == CircuitBreakerState.CLOSED
+        return self._state == CircuitBreakerState.CLOSED
     
     def is_half_open(self) -> bool:
         """Check if circuit is half-open."""
         return self.state == CircuitBreakerState.HALF_OPEN
     
+    @property
+    def state(self) -> CircuitBreakerState:
+        """Get current state, checking for transitions."""
+        # Check if we should transition to half-open
+        if self._state == CircuitBreakerState.OPEN and self._should_attempt_reset():
+            self._set_half_open()
+        return self._state
+    
     def get_stats(self) -> Dict[str, Any]:
         """Get circuit breaker statistics."""
         return {
-            'state': self.state.value,
+            'state': self._state.value,
             'failure_count': self.failure_count,
             'success_count': self.success_count,
             'last_failure_time': self.last_failure_time,
@@ -207,6 +226,9 @@ class CircuitBreaker:
             'total_failures': self.total_failures,
             'total_successes': self.total_successes,
             'total_rejected': self.total_rejected,
+            'total_calls': self.total_requests,
+            'successful_calls': self.total_successes,
+            'failed_calls': self.total_failures,
             'failure_rate': self.total_failures / max(self.total_requests, 1),
             'success_rate': self.total_successes / max(self.total_requests, 1)
         }
@@ -281,6 +303,10 @@ def should_trigger_circuit_breaker(response: Optional[httpx.Response],
     Returns:
         True if circuit breaker should be triggered
     """
+    # If circuit breaker is disabled, never trigger
+    if not config.enabled:
+        return False
+    
     # Check for timeout exceptions
     if exception and any(isinstance(exception, exc_type) for exc_type in config.timeout_exceptions):
         return True
@@ -290,7 +316,7 @@ def should_trigger_circuit_breaker(response: Optional[httpx.Response],
         return True
     
     # Check for failure status codes
-    if response and response.status_code in config.failure_status_codes:
+    if response and config.failure_status_codes and response.status_code in config.failure_status_codes:
         return True
     
     return False

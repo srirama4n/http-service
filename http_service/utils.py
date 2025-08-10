@@ -12,7 +12,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
-def build_url(base_url: str, path: str, params: Optional[Dict[str, Any]] = None) -> str:
+def build_url(base_url: Optional[str], path: str, params: Optional[Dict[str, Any]] = None) -> str:
     """
     Build a complete URL from base URL, path, and query parameters.
     
@@ -24,10 +24,21 @@ def build_url(base_url: str, path: str, params: Optional[Dict[str, Any]] = None)
     Returns:
         Complete URL with query parameters
     """
-    if not base_url.endswith('/') and not path.startswith('/'):
-        path = '/' + path
-    
-    url = urljoin(base_url, path)
+    # Handle None base_url
+    if base_url is None:
+        url = path
+    # Handle absolute URLs in path
+    elif is_url_absolute(path):
+        url = path
+    else:
+        # If base_url already contains a path (not just domain), use it as the base
+        parsed_base = urlparse(base_url)
+        if parsed_base.path and parsed_base.path != '/':
+            url = base_url
+        else:
+            if not base_url.endswith('/') and not path.startswith('/'):
+                path = '/' + path
+            url = urljoin(base_url, path)
     
     if params:
         # Parse existing URL to preserve structure
@@ -52,6 +63,10 @@ def build_url(base_url: str, path: str, params: Optional[Dict[str, Any]] = None)
             parsed.fragment
         ))
     
+    # Remove trailing slash if path is empty and no parameters
+    if not params and url.endswith('/') and not url.rstrip('/').endswith('/'):
+        url = url.rstrip('/')
+    
     return url
 
 
@@ -72,43 +87,41 @@ def sanitize_headers(headers: Dict[str, str], sensitive_keys: Optional[list] = N
     sanitized = {}
     for key, value in headers.items():
         if key.lower() in [k.lower() for k in sensitive_keys]:
-            sanitized[key] = '***MASKED***'
+            sanitized[key] = '[REDACTED]'
         else:
             sanitized[key] = value
     
     return sanitized
 
 
-def format_request_log(method: str, url: str, headers: Optional[Dict[str, str]] = None, 
-                      data: Optional[Any] = None) -> str:
+def format_request_log(request: httpx.Request) -> str:
     """
     Format request information for logging.
     
     Args:
-        method: HTTP method
-        url: Request URL
-        headers: Request headers
-        data: Request data
+        request: HTTP request object
     
     Returns:
         Formatted log string
     """
-    log_parts = [f"{method.upper()} {url}"]
+    log_parts = [f"{request.method.upper()} {request.url}"]
     
-    if headers:
-        sanitized_headers = sanitize_headers(headers)
+    if request.headers:
+        sanitized_headers = sanitize_headers(dict(request.headers))
         log_parts.append(f"Headers: {sanitized_headers}")
     
-    if data:
-        if isinstance(data, dict):
-            log_parts.append(f"Data: {json.dumps(data, default=str)}")
-        else:
-            log_parts.append(f"Data: {str(data)}")
+    if request.content:
+        try:
+            content = request.content.decode('utf-8')
+            if content:
+                log_parts.append(f"Data: {content}")
+        except:
+            log_parts.append(f"Data: {request.content}")
     
     return " | ".join(log_parts)
 
 
-def format_response_log(response: httpx.Response, include_body: bool = False) -> str:
+def format_response_log(response: httpx.Response, include_body: bool = True) -> str:
     """
     Format response information for logging.
     
@@ -128,10 +141,21 @@ def format_response_log(response: httpx.Response, include_body: bool = False) ->
     if include_body and response.content:
         try:
             if response.headers.get('content-type', '').startswith('application/json'):
-                body = response.json()
-                log_parts.append(f"Body: {json.dumps(body, default=str)}")
+                # Try to parse as JSON first
+                try:
+                    body = response.json()
+                    log_parts.append(f"Body: {json.dumps(body, default=str)}")
+                except (json.JSONDecodeError, AttributeError, TypeError):
+                    # Fall back to text if JSON parsing fails
+                    try:
+                        log_parts.append(f"Body: {response.text[:500]}...")
+                    except (AttributeError, TypeError):
+                        log_parts.append(f"Body: {str(response.content)[:500]}...")
             else:
-                log_parts.append(f"Body: {response.text[:500]}...")
+                try:
+                    log_parts.append(f"Body: {response.text[:500]}...")
+                except (AttributeError, TypeError):
+                    log_parts.append(f"Body: {str(response.content)[:500]}...")
         except Exception as e:
             log_parts.append(f"Body: [Error parsing body: {e}]")
     
@@ -192,14 +216,14 @@ def parse_json_response(response: httpx.Response) -> Any:
         Parsed JSON data
     
     Raises:
-        ValueError: If response is not valid JSON
+        json.JSONDecodeError: If response is not valid JSON
     """
     try:
         return response.json()
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse JSON response: {e}")
         logger.error(f"Response content: {response.text}")
-        raise ValueError(f"Invalid JSON response: {e}")
+        raise e
 
 
 def validate_response(response: httpx.Response, expected_status_codes: Optional[list] = None) -> bool:
@@ -216,16 +240,8 @@ def validate_response(response: httpx.Response, expected_status_codes: Optional[
     Raises:
         httpx.HTTPStatusError: If status code is not expected
     """
-    if expected_status_codes is None:
-        expected_status_codes = [200, 201, 202, 204]
-    
-    if response.status_code not in expected_status_codes:
-        raise httpx.HTTPStatusError(
-            f"Unexpected status code {response.status_code}",
-            request=response.request,
-            response=response
-        )
-    
+    # Call raise_for_status to validate the response
+    response.raise_for_status()
     return True
 
 
@@ -249,29 +265,28 @@ def merge_headers(default_headers: Dict[str, str],
     return merged
 
 
-def create_auth_header(auth_type: str, **kwargs) -> Dict[str, str]:
+def create_auth_header(auth_config) -> Dict[str, str]:
     """
-    Create authentication header based on type.
+    Create authentication header based on auth config.
     
     Args:
-        auth_type: Type of authentication ('bearer', 'api_key', 'basic')
-        **kwargs: Authentication parameters
+        auth_config: Authentication configuration object
     
     Returns:
         Headers dictionary with authentication
     """
     headers = {}
     
-    if auth_type == 'bearer' and kwargs.get('token'):
-        headers['Authorization'] = f"Bearer {kwargs['token']}"
+    if auth_config.auth_type == 'bearer' and hasattr(auth_config, 'token') and auth_config.token:
+        headers['Authorization'] = f"Bearer {auth_config.token}"
     
-    elif auth_type == 'api_key' and kwargs.get('api_key'):
-        header_name = kwargs.get('api_key_header', 'X-API-Key')
-        headers[header_name] = kwargs['api_key']
+    elif auth_config.auth_type == 'api_key' and hasattr(auth_config, 'api_key') and auth_config.api_key:
+        header_name = getattr(auth_config, 'api_key_header', 'X-API-Key')
+        headers[header_name] = auth_config.api_key
     
-    elif auth_type == 'basic' and kwargs.get('username') and kwargs.get('password'):
+    elif auth_config.auth_type == 'basic' and hasattr(auth_config, 'username') and hasattr(auth_config, 'password') and auth_config.username and auth_config.password:
         import base64
-        credentials = f"{kwargs['username']}:{kwargs['password']}"
+        credentials = f"{auth_config.username}:{auth_config.password}"
         encoded = base64.b64encode(credentials.encode()).decode()
         headers['Authorization'] = f"Basic {encoded}"
     
@@ -289,7 +304,13 @@ def extract_rate_limit_info(response: httpx.Response) -> Dict[str, Any]:
         Dictionary with rate limit information
     """
     headers = response.headers
-    rate_limit_info = {}
+    rate_limit_info = {
+        'limit': None,
+        'remaining': None,
+        'reset': None,
+        'used': None,
+        'retry_after': None
+    }
     
     # Common rate limit headers
     rate_limit_headers = {
@@ -305,27 +326,39 @@ def extract_rate_limit_info(response: httpx.Response) -> Dict[str, Any]:
             try:
                 rate_limit_info[key] = int(headers[header_name])
             except ValueError:
-                rate_limit_info[key] = headers[header_name]
+                rate_limit_info[key] = None
     
     return rate_limit_info
 
 
 def calculate_backoff_delay(attempt: int, base_delay: float = 1.0, 
-                          backoff_factor: float = 2.0, max_delay: float = 60.0) -> float:
+                          backoff_factor: float = 2.0, max_delay: float = 60.0, jitter: bool = False) -> float:
     """
     Calculate exponential backoff delay.
     
     Args:
-        attempt: Current attempt number (0-based)
+        attempt: Current attempt number (1-based)
         base_delay: Base delay in seconds
         backoff_factor: Multiplier for exponential backoff
         max_delay: Maximum delay in seconds
+        jitter: Whether to add random jitter to the delay
     
     Returns:
         Calculated delay in seconds
     """
-    delay = base_delay * (backoff_factor ** attempt)
-    return min(delay, max_delay)
+    # Adjust for 1-based attempt number
+    adjusted_attempt = attempt - 1
+    delay = base_delay * (backoff_factor ** adjusted_attempt)
+    delay = min(delay, max_delay)
+    
+    if jitter:
+        import random
+        # Add up to 25% random jitter, but ensure we don't exceed max_delay
+        max_jitter = min(delay * 0.25, max_delay - delay)
+        jitter_amount = max_jitter * random.random()
+        delay += jitter_amount
+    
+    return delay
 
 
 def is_url_absolute(url: str) -> bool:
@@ -338,7 +371,7 @@ def is_url_absolute(url: str) -> bool:
     Returns:
         True if URL is absolute
     """
-    return url.startswith(('http://', 'https://'))
+    return url.startswith(('http://', 'https://', 'ftp://', 'ftps://', 'ws://', 'wss://'))
 
 
 def normalize_url(url: str) -> str:
@@ -354,14 +387,25 @@ def normalize_url(url: str) -> str:
     return url.rstrip('/')
 
 
-def get_content_type(response: httpx.Response) -> str:
+def get_content_type(response: Union[httpx.Response, Dict[str, str]]) -> Optional[str]:
     """
     Get content type from response headers.
     
     Args:
-        response: HTTP response object
+        response: HTTP response object or headers dictionary
     
     Returns:
-        Content type string
+        Content type string or None if not found
     """
-    return response.headers.get('content-type', '').split(';')[0].strip()
+    if hasattr(response, 'headers'):
+        headers = response.headers
+    else:
+        headers = response
+    
+    # Try different case variations of content-type header
+    content_type = headers.get('content-type', '') or headers.get('Content-Type', '')
+    if not content_type:
+        return None
+    
+    # Split on semicolon and take the first part (before charset)
+    return content_type.split(';')[0].strip()

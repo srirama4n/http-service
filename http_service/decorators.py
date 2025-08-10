@@ -54,8 +54,11 @@ def retry(
                     last_exception = e
                     should_retry = False
                     
+                    # Default behavior: retry on all exceptions unless specific ones are specified
                     if retry_on_exceptions:
                         should_retry = any(isinstance(e, exc_type) for exc_type in retry_on_exceptions)
+                    else:
+                        should_retry = True
                     
                     if should_retry and attempt < max_retries:
                         delay = retry_delay * (backoff_factor ** attempt)
@@ -114,8 +117,11 @@ def async_retry(
                     last_exception = e
                     should_retry = False
                     
+                    # Default behavior: retry on all exceptions unless specific ones are specified
                     if retry_on_exceptions:
                         should_retry = any(isinstance(e, exc_type) for exc_type in retry_on_exceptions)
+                    else:
+                        should_retry = True
                     
                     if should_retry and attempt < max_retries:
                         delay = retry_delay * (backoff_factor ** attempt)
@@ -133,28 +139,42 @@ def async_retry(
     return decorator
 
 
-def rate_limit(requests_per_second: float):
+def rate_limit(requests_per_second: Optional[float] = None, burst_size: int = 1):
     """
     Decorator to add rate limiting to functions.
     
     Args:
-        requests_per_second: Maximum requests per second
+        requests_per_second: Maximum requests per second (None for no limit)
+        burst_size: Number of requests allowed in burst
     """
     def decorator(func: Callable) -> Callable:
         last_request_time = 0
+        request_count = 0
         
         @wraps(func)
         def wrapper(*args, **kwargs):
-            nonlocal last_request_time
+            nonlocal last_request_time, request_count
+            
+            # If no rate limiting, just call the function
+            if requests_per_second is None:
+                return func(*args, **kwargs)
             
             current_time = time.time()
             time_since_last_request = current_time - last_request_time
             min_interval = 1.0 / requests_per_second
             
-            if time_since_last_request < min_interval:
-                sleep_time = min_interval - time_since_last_request
-                time.sleep(sleep_time)
+            # Reset burst counter if enough time has passed
+            if time_since_last_request >= min_interval:
+                request_count = 0
             
+            # Check if we need to wait
+            if request_count >= burst_size:
+                sleep_time = min_interval - time_since_last_request
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+                request_count = 0
+            
+            request_count += 1
             last_request_time = time.time()
             return func(*args, **kwargs)
         
@@ -162,28 +182,42 @@ def rate_limit(requests_per_second: float):
     return decorator
 
 
-def async_rate_limit(requests_per_second: float):
+def async_rate_limit(requests_per_second: Optional[float] = None, burst_size: int = 1):
     """
     Decorator to add rate limiting to async functions.
     
     Args:
-        requests_per_second: Maximum requests per second
+        requests_per_second: Maximum requests per second (None for no limit)
+        burst_size: Number of requests allowed in burst
     """
     def decorator(func: Callable) -> Callable:
         last_request_time = 0
+        request_count = 0
         
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            nonlocal last_request_time
+            nonlocal last_request_time, request_count
+            
+            # If no rate limiting, just call the function
+            if requests_per_second is None:
+                return await func(*args, **kwargs)
             
             current_time = time.time()
             time_since_last_request = current_time - last_request_time
             min_interval = 1.0 / requests_per_second
             
-            if time_since_last_request < min_interval:
-                sleep_time = min_interval - time_since_last_request
-                await asyncio.sleep(sleep_time)
+            # Reset burst counter if enough time has passed
+            if time_since_last_request >= min_interval:
+                request_count = 0
             
+            # Check if we need to wait
+            if request_count >= burst_size:
+                sleep_time = min_interval - time_since_last_request
+                if sleep_time > 0:
+                    await asyncio.sleep(sleep_time)
+                request_count = 0
+            
+            request_count += 1
             last_request_time = time.time()
             return await func(*args, **kwargs)
         
@@ -191,25 +225,31 @@ def async_rate_limit(requests_per_second: float):
     return decorator
 
 
-def log_request_response(log_level: str = "INFO"):
+def log_request_response(func=None, *, log_level: str = "INFO", enable_logging: bool = True):
     """
     Decorator to log request and response details.
     
     Args:
+        func: Function to decorate (when used without parameters)
         log_level: Logging level for the messages
+        enable_logging: Whether to enable logging
     """
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
+            if not enable_logging:
+                return func(*args, **kwargs)
+            
             func_name = func.__name__
-            logger.log(getattr(logging, log_level.upper()), f"Making request: {func_name}")
+            getattr(logger, log_level.lower())(f"Making request: {func_name}")
             
             try:
                 result = func(*args, **kwargs)
                 
                 if hasattr(result, 'status_code'):
-                    logger.log(getattr(logging, log_level.upper()), 
-                             f"Response: {result.status_code} - {result.reason_phrase}")
+                    getattr(logger, log_level.lower())(f"Response: {result.status_code} - {result.reason_phrase}")
+                else:
+                    getattr(logger, log_level.lower())(f"Response: {result}")
                 
                 return result
                 
@@ -218,28 +258,38 @@ def log_request_response(log_level: str = "INFO"):
                 raise
         
         return wrapper
-    return decorator
+    
+    if func is None:
+        return decorator
+    else:
+        return decorator(func)
 
 
-def async_log_request_response(log_level: str = "INFO"):
+def async_log_request_response(func=None, *, log_level: str = "INFO", enable_logging: bool = True):
     """
     Decorator to log request and response details for async functions.
     
     Args:
+        func: Function to decorate (when used without parameters)
         log_level: Logging level for the messages
+        enable_logging: Whether to enable logging
     """
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs):
+            if not enable_logging:
+                return await func(*args, **kwargs)
+            
             func_name = func.__name__
-            logger.log(getattr(logging, log_level.upper()), f"Making async request: {func_name}")
+            getattr(logger, log_level.lower())(f"Making async request: {func_name}")
             
             try:
                 result = await func(*args, **kwargs)
                 
                 if hasattr(result, 'status_code'):
-                    logger.log(getattr(logging, log_level.upper()), 
-                             f"Response: {result.status_code} - {result.reason_phrase}")
+                    getattr(logger, log_level.lower())(f"Response: {result.status_code} - {result.reason_phrase}")
+                else:
+                    getattr(logger, log_level.lower())(f"Response: {result}")
                 
                 return result
                 
@@ -248,4 +298,8 @@ def async_log_request_response(log_level: str = "INFO"):
                 raise
         
         return wrapper
-    return decorator
+    
+    if func is None:
+        return decorator
+    else:
+        return decorator(func)

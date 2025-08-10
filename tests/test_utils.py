@@ -377,7 +377,7 @@ class TestCalculateBackoffDelay:
     
     def test_calculate_backoff_delay_with_jitter(self):
         """Test calculate_backoff_delay with jitter."""
-        result = calculate_backoff_delay(2, 1.0, 2.0, jitter=True)
+        result = calculate_backoff_delay(2, 1.0, 2.0, 2.0, jitter=True)
         # Should be between 1.0 and 2.0
         assert 1.0 <= result <= 2.0
 

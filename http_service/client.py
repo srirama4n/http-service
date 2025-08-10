@@ -154,13 +154,14 @@ class HttpClient:
                 raise_for_status=raise_for_status
             )
         
-        # Initialize circuit breaker
+        # Initialize circuit breaker after parameters are set
+        failure_status_codes = self.circuit_breaker_failure_status_codes if self.circuit_breaker_failure_status_codes is not None else [500, 502, 503, 504]
         self._circuit_breaker = CircuitBreaker(
             CircuitBreakerConfig(
                 enabled=self.circuit_breaker_enabled,
                 failure_threshold=self.circuit_breaker_failure_threshold,
                 recovery_timeout=self.circuit_breaker_recovery_timeout,
-                failure_status_codes=self.circuit_breaker_failure_status_codes,
+                failure_status_codes=failure_status_codes,
                 success_threshold=self.circuit_breaker_success_threshold
             )
         )
@@ -296,29 +297,26 @@ class HttpClient:
         verify_setting = self._determine_verify_setting(ssl_context)
         
         # Create the client
-        self._client = httpx.Client(
-            base_url=self.base_url,
-            timeout=timeout,
-            limits=limits,
-            auth=auth,
-            headers=headers,
-            verify=verify_setting,
-            follow_redirects=self.follow_redirects
-        )
+        client_kwargs = {
+            'timeout': timeout,
+            'limits': limits,
+            'auth': auth,
+            'headers': headers,
+            'verify': verify_setting,
+            'follow_redirects': self.follow_redirects
+        }
         
-        # Create async client
-        self._async_client = httpx.AsyncClient(
-            base_url=self.base_url,
-            timeout=timeout,
-            limits=limits,
-            auth=auth,
-            headers=headers,
-            verify=verify_setting,
-            follow_redirects=self.follow_redirects
-        )
+        # Only add base_url if it's provided
+        if self.base_url:
+            client_kwargs['base_url'] = self.base_url
+        
+        self._client = httpx.Client(**client_kwargs)
+        self._async_client = httpx.AsyncClient(**client_kwargs)
     
     def _retry_decorator(self, func):
         """Create retry decorator for the client."""
+        if self.max_retries == 0:
+            return func
         return retry(
             max_retries=self.max_retries,
             retry_delay=self.retry_delay,
@@ -350,16 +348,47 @@ class HttpClient:
     def _make_request(self, method: str, url: str, **kwargs):
         """Make an HTTP request with circuit breaker and retry logic."""
         def request_func():
-            # Check circuit breaker
-            if self.circuit_breaker_enabled:
-                return self._circuit_breaker.call(
-                    lambda: self._client.request(method, url, **kwargs)
+            response = self._client.request(method, url, **kwargs)
+            
+            # Check if response status code should trigger circuit breaker
+            if (self.circuit_breaker_enabled and 
+                self._circuit_breaker.config.failure_status_codes and 
+                len(self._circuit_breaker.config.failure_status_codes) > 0 and
+                response.status_code in self._circuit_breaker.config.failure_status_codes):
+                # Raise an exception to trigger circuit breaker
+                import httpx
+                raise httpx.HTTPStatusError(
+                    f"{response.status_code} {response.reason_phrase}",
+                    request=response.request,
+                    response=response
                 )
-            else:
-                return self._client.request(method, url, **kwargs)
+            
+            return response
         
         # Apply decorators
         decorated_func = self._retry_decorator(self._rate_limit_decorator(request_func))
+        
+        # Wrap with circuit breaker if enabled
+        if self.circuit_breaker_enabled:
+            final_func = lambda: self._circuit_breaker.call(decorated_func)
+        else:
+            final_func = decorated_func
+        
+        try:
+            response = final_func()
+            
+            # Raise for status if configured
+            if self.raise_for_status:
+                response.raise_for_status()
+            
+            return response
+            
+        except CircuitBreakerOpenError:
+            # Re-raise circuit breaker errors
+            raise
+        except Exception as e:
+            # Let the circuit breaker handle failures automatically
+            raise
     
     def _determine_verify_setting(self, ssl_context):
         """Determine the verify setting based on verify_ssl flag and SSL context."""
@@ -492,11 +521,17 @@ class HttpClient:
         try:
             response = await decorated_func()
             
-            # Check if response should trigger circuit breaker
-            if self.circuit_breaker_enabled and should_trigger_circuit_breaker(
-                response, None, self._circuit_breaker.config
-            ):
-                self._circuit_breaker.record_failure()
+            # Check if response status code should trigger circuit breaker
+            if (self.circuit_breaker_enabled and 
+                self._circuit_breaker.config.failure_status_codes and 
+                response.status_code in self._circuit_breaker.config.failure_status_codes):
+                # Raise an exception to trigger circuit breaker
+                import httpx
+                raise httpx.HTTPStatusError(
+                    f"{response.status_code} {response.reason_phrase}",
+                    request=response.request,
+                    response=response
+                )
             
             # Raise for status if configured
             if self.raise_for_status:
@@ -508,9 +543,7 @@ class HttpClient:
             # Re-raise circuit breaker errors
             raise
         except Exception as e:
-            # Record failure in circuit breaker
-            if self.circuit_breaker_enabled:
-                self._circuit_breaker.record_failure()
+            # Let the circuit breaker handle failures automatically
             raise
     
     def get(self, url: str, **kwargs):

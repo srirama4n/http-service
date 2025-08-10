@@ -78,8 +78,8 @@ class HTTPClientConfig:
         return cls(
             # Base settings
             base_url=os.getenv('HTTP_BASE_URL'),
-            verify_ssl=os.getenv('HTTP_VERIFY_SSL', 'true').lower() == 'true',
-            enable_logging=os.getenv('HTTP_ENABLE_LOGGING', 'true').lower() == 'true',
+            verify_ssl=cls._parse_boolean(os.getenv('HTTP_VERIFY_SSL', 'true'), True),
+            enable_logging=cls._parse_boolean(os.getenv('HTTP_ENABLE_LOGGING', 'true'), True),
             
             # Timeout settings
             connect_timeout=float(os.getenv('HTTP_CONNECT_TIMEOUT', '10.0')),
@@ -138,6 +138,16 @@ class HTTPClientConfig:
             # Custom headers
             custom_headers=cls._parse_custom_headers()
         )
+    
+    @staticmethod
+    def _parse_boolean(value: str, default: bool) -> bool:
+        """Parse boolean value from string with default fallback."""
+        if value.lower() in ('true', '1', 'yes', 'on'):
+            return True
+        elif value.lower() in ('false', '0', 'no', 'off'):
+            return False
+        else:
+            return default
     
     @staticmethod
     def _parse_custom_headers() -> Dict[str, str]:

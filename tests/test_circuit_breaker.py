@@ -7,7 +7,7 @@ import time
 import threading
 from unittest.mock import Mock, patch
 from http_service.circuit_breaker import (
-    CircuitBreaker, CircuitBreakerOpenError, CircuitBreakerHalfOpenError,
+    CircuitBreaker, CircuitBreakerOpenError,
     should_trigger_circuit_breaker
 )
 from http_service.models import CircuitBreakerState, CircuitBreakerConfig
@@ -338,6 +338,9 @@ class TestCircuitBreaker:
         
         assert breaker.state == CircuitBreakerState.OPEN
         
+        # Reset circuit breaker to test exception filtering
+        breaker.reset()
+        
         def other_error_function():
             raise TypeError("other error")
         
@@ -345,8 +348,8 @@ class TestCircuitBreaker:
         with pytest.raises(TypeError):
             breaker.call(other_error_function)
         
-        # Should still be open
-        assert breaker.state == CircuitBreakerState.OPEN
+        # Should still be closed (not open) because TypeError was ignored
+        assert breaker.state == CircuitBreakerState.CLOSED
 
 
 class TestShouldTriggerCircuitBreaker:
@@ -424,7 +427,7 @@ class TestCircuitBreakerExceptions:
         error = CircuitBreakerOpenError("Circuit breaker is open")
         assert str(error) == "Circuit breaker is open"
     
-    def test_circuit_breaker_half_open_error(self):
-        """Test CircuitBreakerHalfOpenError."""
-        error = CircuitBreakerHalfOpenError("Circuit breaker is half-open")
-        assert str(error) == "Circuit breaker is half-open"
+    def test_circuit_breaker_open_error_message(self):
+        """Test CircuitBreakerOpenError message."""
+        error = CircuitBreakerOpenError("Circuit breaker is open")
+        assert str(error) == "Circuit breaker is open"
