@@ -33,7 +33,11 @@ help:
 	@echo "  security       - Run security checks"
 	@echo ""
 	@echo "Documentation:"
-	@echo "  docs           - Build documentation"
+	@echo "  docs           - Build HTML documentation"
+	@echo "  docs-serve     - Build and serve documentation locally"
+	@echo "  docs-clean     - Clean documentation build artifacts"
+	@echo "  docs-linkcheck - Check for broken links"
+	@echo "  docs-pdf       - Build PDF documentation"
 	@echo ""
 	@echo "Development:"
 	@echo "  clean          - Clean build artifacts"
@@ -107,7 +111,48 @@ security:
 
 # Documentation
 docs:
-	sphinx-build -b html docs/ docs/_build/html
+	@echo "Building documentation..."
+	cd docs && sphinx-build -b html . _build/html
+	@echo "Documentation built in docs/_build/html/"
+
+docs-clean:
+	@echo "Cleaning documentation build artifacts..."
+	rm -rf docs/_build
+	@echo "Documentation build artifacts cleaned"
+
+docs-serve:
+	@echo "Building and serving documentation..."
+	cd docs && sphinx-build -b html . _build/html
+	@echo "Documentation available at http://localhost:8000"
+	cd docs/_build/html && python -m http.server 8000
+
+docs-linkcheck:
+	@echo "Checking documentation links..."
+	cd docs && sphinx-build -b linkcheck . _build/linkcheck
+
+docs-spelling:
+	@echo "Checking documentation spelling..."
+	cd docs && sphinx-build -b spelling . _build/spelling
+
+docs-coverage:
+	@echo "Generating documentation coverage report..."
+	cd docs && sphinx-build -b coverage . _build/coverage
+
+docs-pdf:
+	@echo "Building PDF documentation..."
+	cd docs && sphinx-build -b latex . _build/latex
+	cd docs/_build/latex && make
+	@echo "PDF documentation built in docs/_build/latex/"
+
+docs-epub:
+	@echo "Building EPUB documentation..."
+	cd docs && sphinx-build -b epub . _build/epub
+	@echo "EPUB documentation built in docs/_build/epub/"
+
+docs-singlehtml:
+	@echo "Building single HTML documentation..."
+	cd docs && sphinx-build -b singlehtml . _build/singlehtml
+	@echo "Single HTML documentation built in docs/_build/singlehtml/"
 
 # Development commands
 clean:
@@ -202,3 +247,15 @@ help-lint:
 	@echo "  make type-check     - Run type checking"
 	@echo "  make security       - Run security checks"
 	@echo "  make quick-lint     - Run basic linting checks"
+
+help-docs:
+	@echo "Documentation Commands:"
+	@echo "  make docs           - Build HTML documentation"
+	@echo "  make docs-clean     - Clean documentation build artifacts"
+	@echo "  make docs-serve     - Build and serve documentation locally"
+	@echo "  make docs-linkcheck - Check for broken links"
+	@echo "  make docs-spelling  - Check documentation spelling"
+	@echo "  make docs-coverage  - Generate documentation coverage report"
+	@echo "  make docs-pdf       - Build PDF documentation"
+	@echo "  make docs-epub      - Build EPUB documentation"
+	@echo "  make docs-singlehtml - Build single HTML file"
