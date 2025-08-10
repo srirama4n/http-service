@@ -1,0 +1,19 @@
+# Testing dependencies for HTTP Service
+# Install with: pip install -r requirements-test.txt
+
+# Core dependencies
+-r requirements.txt
+
+# Testing framework
+pytest>=7.0.0,<8.0.0
+pytest-asyncio>=0.21.0,<1.0.0
+pytest-cov>=4.0.0,<5.0.0
+pytest-mock>=3.10.0,<4.0.0
+pytest-xdist>=3.0.0,<4.0.0
+
+# HTTP mocking
+responses>=0.23.0,<1.0.0
+aioresponses>=0.7.0,<1.0.0
+
+# Performance testing
+pytest-benchmark>=4.0.0,<5.0.0

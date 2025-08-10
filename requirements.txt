@@ -1,2 +1,14 @@
-httpx>=0.25.0
-python-dotenv>=1.0.0
+# Core HTTP client library
+httpx>=0.25.0,<1.0.0
+
+# Environment variable management
+python-dotenv>=1.0.0,<2.0.0
+
+# SSL/TLS certificate handling
+certifi>=2023.0.0
+
+# Additional HTTP utilities (optional but recommended)
+urllib3>=2.0.0,<3.0.0
+
+# Type hints support
+typing-extensions>=4.0.0; python_version<"3.8"

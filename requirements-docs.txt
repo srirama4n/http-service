@@ -1,0 +1,11 @@
+# Documentation dependencies for HTTP Service
+# Install with: pip install -r requirements-docs.txt
+
+# Core dependencies
+-r requirements.txt
+
+# Documentation generation
+sphinx>=6.0.0,<7.0.0
+sphinx-rtd-theme>=1.2.0,<2.0.0
+myst-parser>=1.0.0,<2.0.0
+sphinx-autodoc-typehints>=1.23.0,<2.0.0

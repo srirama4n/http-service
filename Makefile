@@ -1,164 +1,204 @@
-# Makefile for Modular HTTP Client
+# Makefile for HTTP Service
+# Provides convenient commands for building, testing, and development
 
-.PHONY: help clean build install test lint type-check coverage docs dev-install package-structure all
+.PHONY: help clean build install test lint docs security dev-setup all
 
 # Default target
 help:
-	@echo "Available commands:"
-	@echo "  help           - Show this help message"
-	@echo "  clean          - Clean build artifacts"
-	@echo "  build          - Build package"
+	@echo "HTTP Service - Available Commands:"
+	@echo ""
+	@echo "Installation:"
 	@echo "  install        - Install package in development mode"
-	@echo "  dev-install    - Install with development dependencies"
-	@echo "  test           - Run tests"
-	@echo "  lint           - Run code linting"
+	@echo "  install-dev    - Install with development dependencies"
+	@echo "  install-test   - Install with testing dependencies"
+	@echo "  install-all    - Install with all dependencies"
+	@echo ""
+	@echo "Building:"
+	@echo "  build          - Build package (wheel and sdist)"
+	@echo "  wheel          - Build wheel distribution"
+	@echo "  sdist          - Build source distribution"
+	@echo ""
+	@echo "Testing:"
+	@echo "  test           - Run all tests"
+	@echo "  test-cov       - Run tests with coverage"
+	@echo "  test-unit      - Run unit tests only"
+	@echo "  test-integration - Run integration tests only"
+	@echo "  test-async     - Run async tests only"
+	@echo "  test-perf      - Run performance tests"
+	@echo ""
+	@echo "Code Quality:"
+	@echo "  lint           - Run all linting checks"
+	@echo "  format         - Format code with black and isort"
 	@echo "  type-check     - Run type checking"
-	@echo "  coverage       - Run tests with coverage"
+	@echo "  security       - Run security checks"
+	@echo ""
+	@echo "Documentation:"
 	@echo "  docs           - Build documentation"
-	@echo "  package-structure - Create package directory structure"
+	@echo ""
+	@echo "Development:"
+	@echo "  clean          - Clean build artifacts"
+	@echo "  dev-setup      - Complete development setup"
 	@echo "  all            - Run clean, build, test, lint"
+	@echo ""
 
-# Clean build artifacts
-clean:
-	@echo "Cleaning build artifacts..."
-	rm -rf build/
-	rm -rf dist/
-	rm -rf *.egg-info/
-	rm -rf .pytest_cache/
-	rm -rf .coverage
-	rm -rf htmlcov/
-	rm -rf .mypy_cache/
-	find . -type f -name "*.pyc" -delete
-	find . -type d -name "__pycache__" -delete
+# Installation commands
+install:
+	python -m pip install -e .
 
-# Build package
+install-dev:
+	python -m pip install -e .[dev]
+
+install-test:
+	python -m pip install -e .[test]
+
+install-all:
+	python -m pip install -e .[all]
+
+# Building commands
 build:
-	@echo "Building package..."
 	python -m build
 
-# Build wheel only
 wheel:
-	@echo "Building wheel..."
 	python -m build --wheel
 
-# Build source distribution only
 sdist:
-	@echo "Building source distribution..."
 	python -m build --sdist
 
-# Install in development mode
-install:
-	@echo "Installing package in development mode..."
-	pip install -e .
-
-# Install with development dependencies
-dev-install:
-	@echo "Installing with development dependencies..."
-	pip install -e .[dev]
-
-# Run tests
+# Testing commands
 test:
-	@echo "Running tests..."
 	python -m pytest tests/ -v
 
-# Run tests with coverage
-coverage:
-	@echo "Running tests with coverage..."
-	python -m pytest tests/ --cov=http_service --cov-report=html --cov-report=term
+test-cov:
+	python -m pytest tests/ --cov=http_service --cov-report=html --cov-report=term-missing
 
-# Run linting
+test-unit:
+	python -m pytest tests/ -m unit -v
+
+test-integration:
+	python -m pytest tests/ -m integration -v
+
+test-async:
+	python -m pytest tests/ -m asyncio -v
+
+test-perf:
+	python -m pytest tests/ -m performance -v
+
+# Code quality commands
 lint:
-	@echo "Running code linting..."
-	black .
-	isort .
-	flake8 .
+	@echo "Running linting checks..."
+	black --check --diff http_service/ tests/
+	isort --check-only --diff http_service/ tests/
+	flake8 http_service/ tests/
+	mypy http_service/
 
-# Run type checking
-type-check:
-	@echo "Running type checking..."
-	mypy .
-
-# Build documentation
-docs:
-	@echo "Building documentation..."
-	cd docs && make html
-
-# Create package structure
-package-structure:
-	@echo "Creating package structure..."
-	mkdir -p modular_http_client
-	@if [ ! -f modular_http_client/__init__.py ]; then \
-		echo '"""Modular HTTP Client Package."""' > modular_http_client/__init__.py; \
-		echo '' >> modular_http_client/__init__.py; \
-		echo '__version__ = "1.0.0"' >> modular_http_client/__init__.py; \
-	fi
-	@for file in http_client.py config.py models.py decorators.py utils.py circuit_breaker.py; do \
-		if [ -f $$file ]; then \
-			mv $$file modular_http_client/; \
-			echo "Moved: $$file -> modular_http_client/$$file"; \
-		fi; \
-	done
-
-# Run all checks
-all: clean build test lint
-
-# Development workflow
-dev: dev-install test lint type-check
-
-# Quick test
-quick-test:
-	@echo "Running quick tests..."
-	python -m pytest tests/ -x -v
-
-# Format code
 format:
 	@echo "Formatting code..."
-	black .
-	isort .
+	black http_service/ tests/
+	isort http_service/ tests/
 
-# Check code quality
-check: lint type-check test
+type-check:
+	mypy http_service/
 
-# Install dependencies
-deps:
-	@echo "Installing dependencies..."
-	pip install -r requirements.txt
+security:
+	@echo "Running security checks..."
+	bandit -r http_service/
+	safety check
+	pip-audit
 
-# Install all dependencies
-deps-all:
-	@echo "Installing all dependencies..."
-	pip install -r requirements.txt
-	pip install -e .[dev,docs]
+# Documentation
+docs:
+	sphinx-build -b html docs/ docs/_build/html
 
-# Create virtual environment
+# Development commands
+clean:
+	@echo "Cleaning build artifacts..."
+	rm -rf build/ dist/ *.egg-info/
+	find . -type d -name __pycache__ -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
+	find . -type f -name "*.pyo" -delete
+	find . -type f -name "*.pyd" -delete
+	rm -rf .pytest_cache/ .coverage htmlcov/ .mypy_cache/ .tox/
+
+dev-setup: clean install-all test lint security
+	@echo "Development environment setup complete!"
+
+all: clean build test lint
+	@echo "Complete build process finished successfully!"
+
+# Quick commands for common tasks
+quick-test:
+	python -m pytest tests/ -x
+
+quick-lint:
+	black --check http_service/ tests/
+	flake8 http_service/ tests/
+
+# Docker commands (if needed)
+docker-build:
+	docker build -t http-service .
+
+docker-run:
+	docker run -it http-service
+
+# Release commands
+release-check: clean build test lint security
+	@echo "Release checks passed!"
+
+release: release-check
+	@echo "Creating release..."
+	git tag -a v$(shell python -c "import http_service; print(http_service.__version__)") -m "Release v$(shell python -c "import http_service; print(http_service.__version__)")"
+	git push --tags
+
+# Development workflow
+dev: install-dev
+	@echo "Development environment ready!"
+
+watch-test:
+	@echo "Watching for changes and running tests..."
+	watchmedo auto-restart --patterns="*.py" --recursive -- python -m pytest tests/ -v
+
+# Environment setup
 venv:
-	@echo "Creating virtual environment..."
 	python -m venv venv
-	@echo "Virtual environment created. Activate it with:"
-	@echo "  source venv/bin/activate  # On Unix/macOS"
-	@echo "  venv\\Scripts\\activate     # On Windows"
+	@echo "Virtual environment created. Activate with: source venv/bin/activate"
 
-# Publish to PyPI (dry run)
-publish-test:
-	@echo "Publishing to TestPyPI (dry run)..."
-	python -m twine upload --repository testpypi dist/*
+venv-dev: venv
+	@echo "Installing development dependencies in virtual environment..."
+	venv/bin/pip install -e .[dev]
 
-# Publish to PyPI
-publish:
-	@echo "Publishing to PyPI..."
-	python -m twine upload dist/*
+# Utility commands
+check-deps:
+	pip list --outdated
 
-# Show package info
-info:
-	@echo "Package information:"
-	@python -c "import setuptools; print(setuptools.find_packages())"
+update-deps:
+	pip install --upgrade pip
+	pip install --upgrade -r requirements.txt
 
-# Show installed packages
-list-packages:
-	@echo "Installed packages:"
-	@pip list
+freeze:
+	pip freeze > requirements-frozen.txt
 
-# Run example
-example:
-	@echo "Running example..."
-	python example_usage.py
+# Help for specific commands
+help-install:
+	@echo "Installation Commands:"
+	@echo "  make install        - Install package in development mode"
+	@echo "  make install-dev    - Install with development dependencies"
+	@echo "  make install-test   - Install with testing dependencies"
+	@echo "  make install-all    - Install with all dependencies"
+
+help-test:
+	@echo "Testing Commands:"
+	@echo "  make test           - Run all tests"
+	@echo "  make test-cov       - Run tests with coverage"
+	@echo "  make test-unit      - Run unit tests only"
+	@echo "  make test-integration - Run integration tests only"
+	@echo "  make test-async     - Run async tests only"
+	@echo "  make test-perf      - Run performance tests"
+	@echo "  make quick-test     - Run tests and stop on first failure"
+
+help-lint:
+	@echo "Linting Commands:"
+	@echo "  make lint           - Run all linting checks"
+	@echo "  make format         - Format code with black and isort"
+	@echo "  make type-check     - Run type checking"
+	@echo "  make security       - Run security checks"
+	@echo "  make quick-lint     - Run basic linting checks"
