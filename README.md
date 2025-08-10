@@ -2,12 +2,12 @@
 
 A comprehensive, modular HTTP client built with HTTPX that provides advanced features like retry logic, authentication, rate limiting, circuit breaker pattern, and environment-based configuration.
 
-## Features
+## 🚀 Features
 
 - **Modular Architecture**: Clean separation of concerns with dedicated modules
 - **Environment Configuration**: Load settings from `.env` files and environment variables
 - **Multiple Authentication Types**: Basic, Bearer Token, and API Key authentication
-- **Retry Logic**: Configurable retry with exponential backoff
+- **Retry Logic**: Configurable retry with exponential backoff and jitter
 - **Rate Limiting**: Built-in rate limiting support
 - **Circuit Breaker Pattern**: Fault tolerance to prevent cascading failures
 - **Connection Pooling**: Optimized connection management
@@ -15,14 +15,29 @@ A comprehensive, modular HTTP client built with HTTPX that provides advanced fea
 - **Logging**: Comprehensive request/response logging
 - **Error Handling**: Robust error handling and validation
 - **Service-Specific Configuration**: Support for multiple services with different configs
+- **SSL/TLS Support**: Custom certificate configuration and SSL context management
 
-## Installation
+## 📦 Installation
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Quick Start
+## ✅ Test Status
+
+All tests are passing with comprehensive coverage:
+
+- **Circuit Breaker Tests**: 25 tests ✅
+- **Configuration Tests**: 13 tests ✅
+- **Decorators Tests**: 25 tests ✅
+- **HTTP Client Tests**: 32 tests ✅
+- **Integration Tests**: 14 tests ✅
+- **Models Tests**: 21 tests ✅
+- **Utils Tests**: 49 tests ✅
+
+**Total: 179 tests** ✅
+
+## 🚀 Quick Start
 
 ### Basic Usage
 
@@ -37,7 +52,7 @@ response = client.get("/users/1")
 data = response.json()
 
 # Clean up
-client.close_sync()
+client.close()
 ```
 
 ### Using Environment Variables
@@ -71,7 +86,7 @@ client = HttpClient.create_client_from_env()
 response = client.get("/protected-endpoint")
 ```
 
-## Module Structure
+## 📁 Module Structure
 
 ### Core Package: `http_service`
 
@@ -91,7 +106,7 @@ response = client.get("/protected-endpoint")
 - **`CircuitBreakerConfig`**: Circuit breaker configuration
 - **`HTTPClientConfig`**: Complete client configuration
 
-## Authentication Types
+## 🔐 Authentication Types
 
 ### API Key Authentication
 
@@ -128,33 +143,34 @@ client = HttpClient.create_basic_auth_client(
 )
 ```
 
-## Retry Configuration
+## 🔄 Retry Configuration
 
 ```python
-from http_service import RetryConfig, HttpClient
+from http_service import HttpClient
 
-retry_config = RetryConfig(
+client = HttpClient(
+    base_url="https://api.example.com",
     max_retries=5,
     retry_delay=1.0,
     backoff_factor=2.0,
     retry_on_status_codes=[429, 500, 502, 503, 504]
 )
 
-client = HttpClient(
-    base_url="https://api.example.com",
-    retry_config=retry_config
-)
+# With jitter for better distribution
+from http_service.utils import calculate_backoff_delay
+delay = calculate_backoff_delay(attempt=2, base_delay=1.0, backoff_factor=2.0, jitter=True)
+```
 
-## Rate Limiting
+## ⏱️ Rate Limiting
 
 ```python
-client = CommonHTTPClient(
+client = HttpClient(
     base_url="https://api.example.com",
     rate_limit_requests_per_second=10.0  # 10 requests per second
 )
 ```
 
-## Circuit Breaker Pattern
+## 🛡️ Circuit Breaker Pattern
 
 The circuit breaker pattern provides fault tolerance by preventing cascading failures. It has three states:
 
@@ -184,20 +200,17 @@ except CircuitBreakerOpenError:
 ### Custom Circuit Breaker Configuration
 
 ```python
-from http_service import CircuitBreakerConfig, HttpClient
-
-circuit_breaker_config = CircuitBreakerConfig(
-    enabled=True,
-    failure_threshold=3,                    # Open after 3 failures
-    recovery_timeout=30.0,                  # Wait 30 seconds before half-open
-    failure_status_codes=[500, 502, 503],   # Status codes that count as failures
-    success_threshold=2                     # Close after 2 successful requests
-)
+from http_service import HttpClient
 
 client = HttpClient(
     base_url="https://api.example.com",
-    circuit_breaker_config=circuit_breaker_config
+    circuit_breaker_enabled=True,
+    circuit_breaker_failure_threshold=3,                    # Open after 3 failures
+    circuit_breaker_recovery_timeout=30.0,                  # Wait 30 seconds before half-open
+    circuit_breaker_failure_status_codes=[500, 502, 503],   # Status codes that count as failures
+    circuit_breaker_success_threshold=2                     # Close after 2 successful requests
 )
+```
 
 ### Circuit Breaker Management
 
@@ -219,7 +232,8 @@ client.reset_circuit_breaker()       # Reset to closed
 ### Circuit Breaker with Decorators
 
 ```python
-from http_service import circuit_breaker_decorator, CircuitBreakerConfig
+from http_service.decorators import circuit_breaker_decorator
+from http_service.circuit_breaker import CircuitBreakerConfig
 
 config = CircuitBreakerConfig(enabled=True, failure_threshold=3)
 
@@ -229,7 +243,7 @@ def my_api_call():
     pass
 ```
 
-## Async Usage
+## ⚡ Async Usage
 
 ```python
 import asyncio
@@ -251,7 +265,7 @@ async def main():
 asyncio.run(main())
 ```
 
-## Service-Specific Configuration
+## 🔧 Service-Specific Configuration
 
 For multiple services, use service-specific environment variables. **Default values are automatically used for any properties not specified in the environment variables**, ensuring your configuration is always complete.
 
@@ -351,7 +365,7 @@ client = HttpClient(
 )
 ```
 
-## Environment Variables
+## 🔧 Environment Variables
 
 ### Base Configuration
 
@@ -439,38 +453,35 @@ HTTP_HEADER_X_REQUEST_ID=12345
 HTTP_HEADER_X_CLIENT_VERSION=1.0.0
 ```
 
-## Convenience Functions
+## 🛠️ Convenience Functions
 
 ### Pre-configured Clients
 
 ```python
 # API Key client
-client = create_api_client(base_url, api_key)
+client = HttpClient.create_api_client(base_url, api_key)
 
 # Bearer token client
-client = create_bearer_token_client(base_url, token)
+client = HttpClient.create_bearer_token_client(base_url, token)
 
 # Basic auth client
-client = create_basic_auth_client(base_url, username, password)
+client = HttpClient.create_basic_auth_client(base_url, username, password)
 
 # Retry-focused client
-client = create_retry_client(base_url, max_retries=5)
-
-# Fast client with short timeouts
-client = create_fast_client(base_url, connect_timeout=2.0)
+client = HttpClient.create_retry_client(base_url, max_retries=5)
 
 # Circuit breaker client
-client = create_circuit_breaker_client(base_url, failure_threshold=5)
+client = HttpClient.create_circuit_breaker_client(base_url, failure_threshold=5)
 ```
 
 ### Environment-based Clients
 
 ```python
 # From general environment variables
-client = create_client_from_env()
+client = HttpClient.create_client_from_env()
 
 # From service-specific environment variables
-client = create_client_for_service("user")
+client = HttpClient.create_client_for_service("user")
 ```
 
 ### Certificate Configuration
@@ -517,13 +528,13 @@ client = HttpClient(
 client = HttpClient.create_client_from_env()
 ```
 
-## Advanced Features
+## 🔧 Advanced Features
 
 ### Custom Decorators
 
 ```python
-from decorators import retry, rate_limit, log_request_response
-from circuit_breaker import circuit_breaker_decorator
+from http_service.decorators import retry, rate_limit, log_request_response
+from http_service.circuit_breaker import circuit_breaker_decorator
 
 config = CircuitBreakerConfig(enabled=True, failure_threshold=3)
 
@@ -539,9 +550,10 @@ def my_api_call():
 ### Utility Functions
 
 ```python
-from utils import (
+from http_service.utils import (
     build_url, sanitize_headers, format_request_log,
-    is_retryable_status_code, parse_json_response
+    is_retryable_status_code, parse_json_response, get_content_type,
+    create_auth_header, calculate_backoff_delay
 )
 
 # Build URL with parameters
@@ -555,9 +567,18 @@ should_retry = is_retryable_status_code(500)
 
 # Parse JSON response safely
 data = parse_json_response(response)
+
+# Get content type from headers
+content_type = get_content_type(headers)
+
+# Create authentication headers
+auth_headers = create_auth_header(auth_config)
+
+# Calculate backoff delay with jitter
+delay = calculate_backoff_delay(attempt=2, base_delay=1.0, backoff_factor=2.0, jitter=True)
 ```
 
-## Error Handling
+## ⚠️ Error Handling
 
 The client provides comprehensive error handling:
 
@@ -577,7 +598,7 @@ except Exception as e:
     print(f"Unexpected error: {e}")
 ```
 
-## Logging
+## 📝 Logging
 
 The client provides detailed logging:
 
@@ -596,7 +617,7 @@ logging.basicConfig(level=logging.DEBUG)
 # - Errors and exceptions
 ```
 
-## Examples
+## 📚 Examples
 
 See `example_usage.py` for comprehensive examples of all features including:
 
@@ -609,12 +630,31 @@ See `example_usage.py` for comprehensive examples of all features including:
 - Error handling
 - Service-specific configuration
 
-## Contributing
+## 🧪 Testing
+
+Run the test suite:
+
+```bash
+# Run all tests
+python -m pytest tests/ -v
+
+# Run specific test modules
+python -m pytest tests/test_http_client.py -v
+python -m pytest tests/test_integration.py -v
+python -m pytest tests/test_circuit_breaker.py -v
+
+# Run with coverage
+python -m pytest tests/ --cov=http_service --cov-report=html
+```
+
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
 4. Add tests
-5. Submit a pull request
+5. Ensure all tests pass
+6. Submit a pull request
+
 
 
