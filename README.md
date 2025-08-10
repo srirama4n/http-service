@@ -946,5 +946,228 @@ twine upload --repository-url http://localhost:8080 dist/*
 5. Ensure all tests pass
 6. Submit a pull request
 
+## 📋 Quick Reference Guide
+
+### 🚀 Getting Started in 5 Minutes
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/srirama4n/http-service.git
+cd http-service
+
+# 2. Install in development mode
+pip install -e .
+
+# 3. Run tests to verify installation
+python -m pytest tests/ -v
+
+# 4. Start using in your application
+```
+
+```python
+# 5. Basic usage in your application
+from http_service import HttpClient
+
+# Create a client
+client = HttpClient(base_url="https://api.example.com")
+
+# Make a request
+response = client.get("/users/1")
+print(response.json())
+
+# Clean up
+client.close()
+```
+
+### 🔧 Common Use Cases
+
+#### Quick API Client Setup
+```python
+# For a simple API
+client = HttpClient.create_api_client(
+    base_url="https://api.example.com",
+    api_key="your-api-key"
+)
+
+# For a service with authentication
+client = HttpClient.create_bearer_token_client(
+    base_url="https://api.example.com",
+    token="your-bearer-token"
+)
+```
+
+#### Environment-Based Configuration
+```bash
+# Create .env file
+echo "HTTP_BASE_URL=https://api.example.com" > .env
+echo "HTTP_API_KEY=your-api-key" >> .env
+echo "HTTP_AUTH_TYPE=api_key" >> .env
+```
+
+```python
+# Use in your application
+client = HttpClient.create_client_from_env()
+```
+
+#### Service-Specific Clients
+```bash
+# Multiple services in .env
+echo "USER_BASE_URL=https://user-api.example.com" >> .env
+echo "USER_API_KEY=user-key" >> .env
+echo "ORDER_BASE_URL=https://order-api.example.com" >> .env
+echo "ORDER_TOKEN=order-token" >> .env
+```
+
+```python
+# Create service-specific clients
+user_client = HttpClient.create_client_for_service("user")
+order_client = HttpClient.create_client_for_service("order")
+```
+
+### 🛠️ Development Workflow
+
+#### Local Development Setup
+```bash
+# 1. Set up development environment
+git clone https://github.com/srirama4n/http-service.git
+cd http-service
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 2. Install dependencies
+pip install -r requirements.txt
+pip install -e .
+
+# 3. Run tests
+python -m pytest tests/ -v
+
+# 4. Make changes and test
+# Edit files...
+python -m pytest tests/test_your_feature.py -v
+```
+
+#### Using in Another Project
+```bash
+# Method 1: Git submodule
+cd your-project
+git submodule add https://github.com/srirama4n/http-service.git libs/http-service
+pip install -e ./libs/http-service
+
+# Method 2: Direct clone
+cd your-project
+git clone https://github.com/srirama4n/http-service.git libs/http-service
+pip install -e ./libs/http-service
+
+# Method 3: Local development
+cd your-project
+ln -s ~/path/to/http-service libs/http-service
+export PYTHONPATH="${PYTHONPATH}:$(pwd)/libs"
+```
+
+### 📦 Package Management
+
+#### Building and Installing
+```bash
+# Build the package
+python setup.py sdist bdist_wheel
+
+# Install from wheel
+pip install dist/http_service-*.whl
+
+# Install in development mode
+pip install -e .
+```
+
+#### Publishing to Local PyPI
+```bash
+# Set up local PyPI server
+pip install pypiserver
+pypi-server -p 8080 ~/packages &
+
+# Build and upload
+python setup.py sdist bdist_wheel
+twine upload --repository-url http://localhost:8080 dist/*
+
+# Install from local PyPI
+pip install --index-url http://localhost:8080/simple/ http-service
+```
+
+### 🔍 Troubleshooting
+
+#### Common Issues and Solutions
+
+**Import Error: No module named 'http_service'**
+```bash
+# Solution 1: Install in development mode
+pip install -e .
+
+# Solution 2: Add to Python path
+export PYTHONPATH="${PYTHONPATH}:/path/to/http-service"
+
+# Solution 3: Use sys.path
+import sys
+sys.path.append('/path/to/http-service')
+```
+
+**Test Failures**
+```bash
+# Run tests with verbose output
+python -m pytest tests/ -v -s
+
+# Run specific test file
+python -m pytest tests/test_http_client.py -v
+
+# Run with coverage
+python -m pytest tests/ --cov=http_service --cov-report=html
+```
+
+**SSL Certificate Issues**
+```python
+# For development environments
+client = HttpClient(
+    base_url="https://api.example.com",
+    verify_ssl=False  # Disable SSL verification
+)
+
+# For production with custom certificates
+client = HttpClient(
+    base_url="https://api.example.com",
+    ca_cert_file="/path/to/ca-cert.pem"
+)
+```
+
+### 📚 Additional Resources
+
+- **Full Documentation**: See `example_usage.py` for comprehensive examples
+- **Test Suite**: Run `python -m pytest tests/ -v` to see all features in action
+- **Environment Variables**: Check `env_example.env` for all available options
+- **Configuration**: See `http_service/config.py` for configuration options
+- **Models**: See `http_service/models.py` for data structures
+
+### 🎯 Best Practices
+
+1. **Use Environment Variables**: Configure your clients using environment variables for flexibility
+2. **Service-Specific Configs**: Use service-specific environment variables for multiple services
+3. **Error Handling**: Always wrap HTTP calls in try-catch blocks
+4. **Resource Management**: Use context managers (`async with client:`) for proper cleanup
+5. **Testing**: Run the test suite to verify your setup
+6. **Logging**: Enable logging for debugging and monitoring
+7. **Circuit Breaker**: Enable circuit breaker for production applications
+8. **Rate Limiting**: Use rate limiting to respect API limits
+
+### 🔄 Version Management
+
+```bash
+# Check current version
+python -c "import http_service; print(http_service.__version__)"
+
+# Update from remote
+git pull origin master
+pip install -e . --force-reinstall
+
+# Pin to specific version
+pip install -e .==1.0.0
+```
+
 
 
