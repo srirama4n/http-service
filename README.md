@@ -19,8 +19,123 @@ A comprehensive, modular HTTP client built with HTTPX that provides advanced fea
 
 ## 📦 Installation
 
+### Standard Installation
+
 ```bash
 pip install -r requirements.txt
+```
+
+### Local Development Installation
+
+For development or using in another local application:
+
+#### Option 1: Install in Development Mode
+
+```bash
+# Clone the repository
+git clone https://github.com/srirama4n/http-service.git
+cd http-service
+
+# Install in development mode (editable)
+pip install -e .
+
+# Or install with all dependencies
+pip install -e .[dev]
+```
+
+#### Option 2: Add to Local Repository
+
+```bash
+# In your local application directory
+git submodule add https://github.com/srirama4n/http-service.git libs/http-service
+
+# Or clone directly
+git clone https://github.com/srirama4n/http-service.git libs/http-service
+
+# Install the local package
+pip install -e ./libs/http-service
+```
+
+#### Option 3: Direct Import (No Installation)
+
+```bash
+# Copy the http_service directory to your project
+cp -r /path/to/http-service/http_service /your/project/libs/
+
+# Add to your Python path
+export PYTHONPATH="${PYTHONPATH}:/your/project/libs"
+
+# Or add to your project's __init__.py
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), 'libs'))
+```
+
+### Using in Another Local Application
+
+#### Method 1: As a Git Submodule
+
+```bash
+# In your application directory
+git submodule add https://github.com/srirama4n/http-service.git external/http-service
+
+# Update submodule when needed
+git submodule update --remote external/http-service
+
+# Install the submodule
+pip install -e ./external/http-service
+```
+
+#### Method 2: As a Local Package
+
+```bash
+# Clone to a local directory
+git clone https://github.com/srirama4n/http-service.git ~/local-packages/http-service
+
+# Add to your application's requirements.txt
+-e ~/local-packages/http-service
+
+# Install
+pip install -r requirements.txt
+```
+
+#### Method 3: Direct Import
+
+```python
+# In your application code
+import sys
+import os
+
+# Add the http_service path
+http_service_path = "/path/to/http-service"
+sys.path.insert(0, http_service_path)
+
+# Now you can import
+from http_service import HttpClient
+```
+
+### Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/srirama4n/http-service.git
+cd http-service
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install in development mode
+pip install -e .
+
+# Run tests
+python -m pytest tests/ -v
+
+# Run specific tests
+python -m pytest tests/test_http_client.py -v
 ```
 
 ## ✅ Test Status
@@ -630,6 +745,90 @@ See `example_usage.py` for comprehensive examples of all features including:
 - Error handling
 - Service-specific configuration
 
+### Real-World Application Example
+
+Here's how to use the HTTP client in a real application:
+
+```python
+# app.py
+import os
+from http_service import HttpClient
+from http_service.utils import build_url, create_auth_header
+
+class UserService:
+    def __init__(self):
+        # Create client with environment configuration
+        self.client = HttpClient.create_client_for_service("user")
+    
+    def get_user(self, user_id: int):
+        """Get user by ID with retry and circuit breaker protection."""
+        try:
+            response = self.client.get(f"/users/{user_id}")
+            return response.json()
+        except Exception as e:
+            print(f"Error fetching user {user_id}: {e}")
+            return None
+    
+    def create_user(self, user_data: dict):
+        """Create user with authentication."""
+        try:
+            response = self.client.post("/users", json=user_data)
+            return response.json()
+        except Exception as e:
+            print(f"Error creating user: {e}")
+            return None
+
+class OrderService:
+    def __init__(self):
+        # Create client with different configuration
+        self.client = HttpClient.create_client_for_service("order")
+    
+    async def get_orders(self, user_id: int):
+        """Get user orders asynchronously."""
+        try:
+            response = await self.client.aget(f"/orders?user_id={user_id}")
+            return response.json()
+        except Exception as e:
+            print(f"Error fetching orders for user {user_id}: {e}")
+            return []
+
+# Usage in your application
+def main():
+    # Initialize services
+    user_service = UserService()
+    order_service = OrderService()
+    
+    # Get user
+    user = user_service.get_user(123)
+    if user:
+        print(f"User: {user['name']}")
+    
+    # Get orders asynchronously
+    import asyncio
+    orders = asyncio.run(order_service.get_orders(123))
+    print(f"Orders: {len(orders)}")
+
+if __name__ == "__main__":
+    main()
+```
+
+### Environment Configuration for the Example
+
+```env
+# .env file
+USER_BASE_URL=https://user-api.example.com
+USER_API_KEY=your-user-api-key
+USER_AUTH_TYPE=api_key
+USER_MAX_RETRIES=3
+USER_CIRCUIT_BREAKER_ENABLED=true
+
+ORDER_BASE_URL=https://order-api.example.com
+ORDER_TOKEN=your-order-bearer-token
+ORDER_AUTH_TYPE=bearer
+ORDER_MAX_RETRIES=5
+ORDER_RATE_LIMIT_RPS=10.0
+```
+
 ## 🧪 Testing
 
 Run the test suite:
@@ -645,6 +844,97 @@ python -m pytest tests/test_circuit_breaker.py -v
 
 # Run with coverage
 python -m pytest tests/ --cov=http_service --cov-report=html
+```
+
+## 🔄 Local Repository Management
+
+### Setting Up a Local Repository
+
+```bash
+# Create a local repository for development
+mkdir ~/local-repos
+cd ~/local-repos
+
+# Clone the repository
+git clone https://github.com/srirama4n/http-service.git
+cd http-service
+
+# Create a new branch for your changes
+git checkout -b feature/your-feature-name
+
+# Make your changes and commit
+git add .
+git commit -m "Add your feature"
+
+# Push to your local repository (if you have one)
+git remote add local /path/to/your/local/repo
+git push local feature/your-feature-name
+```
+
+### Using Local Repository in Applications
+
+#### Method 1: Local Git Repository
+
+```bash
+# In your application directory
+git remote add http-service ~/local-repos/http-service
+git subtree add --prefix=libs/http-service http-service master --squash
+
+# Or use as a submodule
+git submodule add ~/local-repos/http-service libs/http-service
+```
+
+#### Method 2: Local Package Installation
+
+```bash
+# Install from local path
+pip install -e ~/local-repos/http-service
+
+# Or add to requirements.txt
+echo "-e ~/local-repos/http-service" >> requirements.txt
+pip install -r requirements.txt
+```
+
+#### Method 3: Symlink for Development
+
+```bash
+# Create a symlink for easy development
+ln -s ~/local-repos/http-service ~/your-app/libs/http-service
+
+# In your application
+import sys
+sys.path.append('~/your-app/libs')
+from http_service import HttpClient
+```
+
+### Managing Local Development
+
+```bash
+# Update your local repository
+cd ~/local-repos/http-service
+git pull origin master
+
+# Update submodules in your application
+cd ~/your-app
+git submodule update --remote libs/http-service
+
+# Reinstall if needed
+pip install -e ~/local-repos/http-service --force-reinstall
+```
+
+### Publishing to Local Package Index
+
+```bash
+# Build the package
+cd ~/local-repos/http-service
+python setup.py sdist bdist_wheel
+
+# Install from local package
+pip install dist/http_service-*.whl
+
+# Or publish to a local PyPI server
+pip install twine
+twine upload --repository-url http://localhost:8080 dist/*
 ```
 
 ## 🤝 Contributing
