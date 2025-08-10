@@ -5,6 +5,7 @@ Demonstrates various ways to create and use the client with different configurat
 
 import asyncio
 import json
+import logging
 import time
 from http_service import (
     HttpClient, RetryConfig, TimeoutConfig, AuthConfig, CircuitBreakerConfig,
@@ -12,31 +13,39 @@ from http_service import (
 )
 from http_service.config import get_config, get_config_for_service
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
+
 
 def example_basic_usage():
     """Example of basic client usage."""
-    print("=== Basic Usage Example ===")
+    logger.info("=== Basic Usage Example ===")
     
     # Create a simple client
     client = HttpClient(base_url="https://jsonplaceholder.typicode.com")
     
     # Make a GET request
     response = client.get("/posts/1")
-    print(f"Status: {response.status_code}")
-    print(f"Data: {response.json()}")
+    logger.info(f"Status: {response.status_code}")
+    logger.info(f"Data: {response.json()}")
     
     # Make a POST request
     data = {"title": "Test Post", "body": "This is a test", "userId": 1}
     response = client.post("/posts", json=data)
-    print(f"POST Status: {response.status_code}")
-    print(f"Created: {response.json()}")
+    logger.info(f"POST Status: {response.status_code}")
+    logger.info(f"Created: {response.json()}")
     
-    client.close_sync()
+    client.close()
 
 
 def example_api_key_client():
     """Example of API key authentication."""
-    print("\n=== API Key Authentication Example ===")
+    logger.info("=== API Key Authentication Example ===")
     
     # Create client with API key
     client = HttpClient.create_api_client(
@@ -47,14 +56,14 @@ def example_api_key_client():
     
     # Make authenticated request
     response = client.get("/protected-endpoint")
-    print(f"Authenticated request status: {response.status_code}")
+    logger.info(f"Authenticated request status: {response.status_code}")
     
-    client.close_sync()
+    client.close()
 
 
 def example_bearer_token_client():
     """Example of bearer token authentication."""
-    print("\n=== Bearer Token Authentication Example ===")
+    logger.info("=== Bearer Token Authentication Example ===")
     
     # Create client with bearer token
     client = HttpClient.create_bearer_token_client(
@@ -64,14 +73,14 @@ def example_bearer_token_client():
     
     # Make authenticated request
     response = client.get("/user/profile")
-    print(f"Bearer auth request status: {response.status_code}")
+    logger.info(f"Bearer auth request status: {response.status_code}")
     
-    client.close_sync()
+    client.close()
 
 
 def example_basic_auth_client():
     """Example of basic authentication."""
-    print("\n=== Basic Authentication Example ===")
+    logger.info("=== Basic Authentication Example ===")
     
     # Create client with basic auth
     client = HttpClient.create_basic_auth_client(
@@ -82,14 +91,14 @@ def example_basic_auth_client():
     
     # Make authenticated request
     response = client.get("/secure-endpoint")
-    print(f"Basic auth request status: {response.status_code}")
+    logger.info(f"Basic auth request status: {response.status_code}")
     
-    client.close_sync()
+    client.close()
 
 
 def example_retry_client():
     """Example of client with aggressive retry configuration."""
-    print("\n=== Retry Configuration Example ===")
+    logger.info("=== Retry Configuration Example ===")
     
     # Create client with retry configuration
     client = HttpClient.create_retry_client(
@@ -101,16 +110,16 @@ def example_retry_client():
     # This will retry on failures
     try:
         response = client.get("/unreliable-endpoint")
-        print(f"Retry client request status: {response.status_code}")
+        logger.info(f"Retry client request status: {response.status_code}")
     except Exception as e:
-        print(f"Request failed after retries: {e}")
+        logger.error(f"Request failed after retries: {e}")
     
-    client.close_sync()
+    client.close()
 
 
 def example_fast_client():
     """Example of client optimized for speed."""
-    print("\n=== Fast Client Example ===")
+    logger.info("\n=== Fast Client Example ===")
     
     # Create fast client with short timeouts
     client = HttpClient(
@@ -121,14 +130,14 @@ def example_fast_client():
     
     # Make fast request
     response = client.get("/fast-endpoint")
-    print(f"Fast client request status: {response.status_code}")
+    logger.info(f"Fast client request status: {response.status_code}")
     
-    client.close_sync()
+    client.close()
 
 
 def example_circuit_breaker_client():
     """Example of circuit breaker functionality."""
-    print("\n=== Circuit Breaker Example ===")
+    logger.info("\n=== Circuit Breaker Example ===")
     
     # Create client with circuit breaker protection
     client = HttpClient.create_circuit_breaker_client(
@@ -141,35 +150,35 @@ def example_circuit_breaker_client():
     for i in range(5):
         try:
             response = client.get("/500")
-            print(f"Request {i+1}: Status {response.status_code}")
+            logger.info(f"Request {i+1}: Status {response.status_code}")
         except CircuitBreakerOpenError as e:
-            print(f"Request {i+1}: Circuit breaker OPEN - {e}")
+            logger.info(f"Request {i+1}: Circuit breaker OPEN - {e}")
             break
         except Exception as e:
-            print(f"Request {i+1}: Error - {type(e).__name__}: {e}")
+            logger.error(f"Request {i+1}: Error - {type(e).__name__}: {e}")
     
     # Check circuit breaker stats
     stats = client.get_circuit_breaker_stats()
     if stats:
-        print(f"Circuit breaker stats: {stats}")
+        logger.info(f"Circuit breaker stats: {stats}")
     
     # Wait for recovery timeout
-    print("Waiting for circuit breaker to attempt recovery...")
+    logger.info("Waiting for circuit breaker to attempt recovery...")
     time.sleep(11)
     
     # Try again (should be in half-open state)
     try:
         response = client.get("/200")
-        print(f"Recovery attempt: Status {response.status_code}")
+        logger.info(f"Recovery attempt: Status {response.status_code}")
     except Exception as e:
-        print(f"Recovery attempt failed: {e}")
+        logger.error(f"Request failed: {e}")
     
-    client.close_sync()
+    client.close()
 
 
 def example_custom_circuit_breaker_config():
     """Example of custom circuit breaker configuration."""
-    print("\n=== Custom Circuit Breaker Configuration Example ===")
+    logger.info("\n=== Custom Circuit Breaker Configuration Example ===")
     
     # Create custom circuit breaker configuration
     circuit_breaker_config = CircuitBreakerConfig(
@@ -190,24 +199,24 @@ def example_custom_circuit_breaker_config():
     for i in range(4):
         try:
             response = client.get("/500")
-            print(f"Request {i+1}: Status {response.status_code}")
+            logger.info(f"Request {i+1}: Status {response.status_code}")
         except CircuitBreakerOpenError as e:
-            print(f"Request {i+1}: Circuit breaker OPEN - {e}")
+            logger.info(f"Request {i+1}: Circuit breaker OPEN - {e}")
             break
         except Exception as e:
-            print(f"Request {i+1}: Error - {type(e).__name__}: {e}")
+            logger.error(f"Request {i+1}: Error - {type(e).__name__}: {e}")
     
     # Check circuit breaker state
-    print(f"Circuit breaker open: {client.is_circuit_breaker_open()}")
-    print(f"Circuit breaker closed: {client.is_circuit_breaker_closed()}")
-    print(f"Circuit breaker half-open: {client.is_circuit_breaker_half_open()}")
+    logger.info(f"Circuit breaker open: {client.is_circuit_breaker_open()}")
+    logger.info(f"Circuit breaker closed: {client.is_circuit_breaker_closed()}")
+    logger.info(f"Circuit breaker half-open: {client.is_circuit_breaker_half_open()}")
     
-    client.close_sync()
+    client.close()
 
 
 def example_custom_configuration():
     """Example of custom configuration."""
-    print("\n=== Custom Configuration Example ===")
+    logger.info("\n=== Custom Configuration Example ===")
     
     # Create custom retry configuration
     retry_config = RetryConfig(
@@ -252,14 +261,14 @@ def example_custom_configuration():
     
     # Make request with custom configuration
     response = client.get("/custom-endpoint")
-    print(f"Custom config request status: {response.status_code}")
+    logger.info(f"Custom config request status: {response.status_code}")
     
-    client.close_sync()
+    client.close()
 
 
 def example_certificate_configuration():
     """Example of certificate configuration."""
-    print("\n=== Certificate Configuration Example ===")
+    logger.info("\n=== Certificate Configuration Example ===")
     
     # Client with CA certificate verification
     ca_client = HttpClient(
@@ -305,60 +314,60 @@ def example_certificate_configuration():
         verify_ssl=True  # Enables SSL certificate verification
     )
     
-    print("Certificate configurations created successfully")
+    logger.info("Certificate configurations created successfully")
     
     # Clean up
-    ca_client.close_sync()
-    mtls_client.close_sync()
-    ssl_client.close_sync()
-    data_client.close_sync()
-    no_verify_client.close_sync()
-    verify_client.close_sync()
+    ca_client.close()
+    mtls_client.close()
+    ssl_client.close()
+    data_client.close()
+    no_verify_client.close()
+    verify_client.close()
 
 
 def example_environment_configuration():
     """Example of using environment-based configuration."""
-    print("\n=== Environment Configuration Example ===")
+    logger.info("\n=== Environment Configuration Example ===")
     
     # Create client from environment variables
     # Make sure to set up your .env file first
     try:
         client = HttpClient.create_client_from_env()
-        print("Client created from environment variables")
+        logger.info("Client created from environment variables")
         
         # Make request
         response = client.get("/env-configured-endpoint")
-        print(f"Environment config request status: {response.status_code}")
+        logger.info(f"Environment config request status: {response.status_code}")
         
-        client.close_sync()
+        client.close()
     except Exception as e:
-        print(f"Environment configuration failed: {e}")
-        print("Make sure to set up your .env file with proper values")
+        logger.error(f"Request failed: {e}")
+        logger.info("Make sure to set up your .env file with proper values")
 
 
 def example_service_specific_configuration():
     """Example of service-specific configuration."""
-    print("\n=== Service-Specific Configuration Example ===")
+    logger.info("\n=== Service-Specific Configuration Example ===")
     
     # Create client for specific service
     # This will look for USER_* environment variables
     try:
         user_client = HttpClient.create_client_for_service("user")
-        print("User service client created")
+        logger.info("User service client created")
         
         # Make request to user service
         response = user_client.get("/users/profile")
-        print(f"User service request status: {response.status_code}")
+        logger.info(f"User service request status: {response.status_code}")
         
-        user_client.close_sync()
+        user_client.close()
     except Exception as e:
-        print(f"Service-specific configuration failed: {e}")
-        print("Make sure to set up USER_* environment variables")
+        logger.error(f"Request failed: {e}")
+        logger.info("Make sure to set up USER_* environment variables")
 
 
 async def example_async_usage():
     """Example of async client usage."""
-    print("\n=== Async Usage Example ===")
+    logger.info("\n=== Async Usage Example ===")
     
     # Create async client
     client = HttpClient(base_url="https://jsonplaceholder.typicode.com")
@@ -367,7 +376,7 @@ async def example_async_usage():
     async with client:
         # Single request
         response = await client.aget("/posts/1")
-        print(f"Async GET status: {response.status_code}")
+        logger.info(f"Async GET status: {response.status_code}")
         
         # Multiple concurrent requests
         tasks = [
@@ -375,14 +384,14 @@ async def example_async_usage():
         ]
         responses = await asyncio.gather(*tasks)
         
-        print(f"Made {len(responses)} concurrent requests")
+        logger.info(f"Made {len(responses)} concurrent requests")
         for i, response in enumerate(responses, 1):
-            print(f"Post {i} status: {response.status_code}")
+            logger.info(f"Post {i} status: {response.status_code}")
 
 
 def example_rate_limiting():
     """Example of rate limiting functionality."""
-    print("\n=== Rate Limiting Example ===")
+    logger.info("\n=== Rate Limiting Example ===")
     
     # Create client with rate limiting
     client = HttpClient(
@@ -393,14 +402,14 @@ def example_rate_limiting():
     # Make multiple requests (will be rate limited)
     for i in range(5):
         response = client.get(f"/posts/{i+1}")
-        print(f"Request {i+1} status: {response.status_code}")
+        logger.info(f"Request {i+1} status: {response.status_code}")
     
-    client.close_sync()
+    client.close()
 
 
 def example_response_processing():
     """Example of response processing utilities."""
-    print("\n=== Response Processing Example ===")
+    logger.info("\n=== Response Processing Example ===")
     
     client = HttpClient(base_url="https://jsonplaceholder.typicode.com")
     
@@ -410,21 +419,21 @@ def example_response_processing():
     # Extract rate limit info (if available)
     rate_limit_info = client.get_rate_limit_info(response)
     if rate_limit_info:
-        print(f"Rate limit info: {rate_limit_info}")
+        logger.info(f"Rate limit info: {rate_limit_info}")
     
     # Process JSON response
     try:
         data = response.json()
-        print(f"Response data: {json.dumps(data, indent=2)}")
+        logger.info(f"Response data: {json.dumps(data, indent=2)}")
     except Exception as e:
-        print(f"Failed to parse JSON: {e}")
+        logger.info(f"Failed to parse JSON: {e}")
     
-    client.close_sync()
+    client.close()
 
 
 def example_error_handling():
     """Example of error handling."""
-    print("\n=== Error Handling Example ===")
+    logger.info("\n=== Error Handling Example ===")
     
     client = HttpClient(
         base_url="https://httpstat.us",
@@ -442,16 +451,16 @@ def example_error_handling():
     for endpoint, description in test_cases:
         try:
             response = client.get(endpoint)
-            print(f"{description}: {response.status_code}")
+            logger.info(f"{description}: {response.status_code}")
         except Exception as e:
-            print(f"{description}: Error - {type(e).__name__}: {e}")
+            logger.error(f"{description}: Error - {type(e).__name__}: {e}")
     
-    client.close_sync()
+    client.close()
 
 
 def example_circuit_breaker_management():
     """Example of circuit breaker management."""
-    print("\n=== Circuit Breaker Management Example ===")
+    logger.info("\n=== Circuit Breaker Management Example ===")
     
     # Create client with circuit breaker
     client = HttpClient.create_circuit_breaker_client(
@@ -461,42 +470,42 @@ def example_circuit_breaker_management():
     )
     
     # Check initial state
-    print(f"Initial state - Open: {client.is_circuit_breaker_open()}")
+    logger.info(f"Initial state - Open: {client.is_circuit_breaker_open()}")
     
     # Force open circuit breaker
     client.force_open_circuit_breaker()
-    print(f"After force open - Open: {client.is_circuit_breaker_open()}")
+    logger.info(f"After force open - Open: {client.is_circuit_breaker_open()}")
     
     # Try to make request (should be rejected)
     try:
         response = client.get("/200")
-        print(f"Request succeeded: {response.status_code}")
+        logger.info(f"Request succeeded: {response.status_code}")
     except CircuitBreakerOpenError as e:
-        print(f"Request rejected: {e}")
+        logger.info(f"Request rejected: {e}")
     
     # Reset circuit breaker
     client.reset_circuit_breaker()
-    print(f"After reset - Open: {client.is_circuit_breaker_open()}")
+    logger.info(f"After reset - Open: {client.is_circuit_breaker_open()}")
     
     # Now request should work
     try:
         response = client.get("/200")
-        print(f"Request after reset: {response.status_code}")
+        logger.info(f"Request after reset: {response.status_code}")
     except Exception as e:
-        print(f"Request failed: {e}")
+        logger.error(f"Request failed: {e}")
     
     # Get statistics
     stats = client.get_circuit_breaker_stats()
     if stats:
-        print(f"Circuit breaker statistics: {json.dumps(stats, indent=2)}")
+        logger.info(f"Circuit breaker statistics: {json.dumps(stats, indent=2)}")
     
-    client.close_sync()
+    client.close()
 
 
 def main():
     """Run all examples."""
-    print("HTTP Client Examples")
-    print("=" * 50)
+    logger.info("HTTP Client Examples")
+    logger.info("=" * 50)
     
     # Run synchronous examples
     example_basic_usage()
@@ -519,8 +528,8 @@ def main():
     # Run async example
     asyncio.run(example_async_usage())
     
-    print("\n" + "=" * 50)
-    print("All examples completed!")
+    logger.info("\n" + "=" * 50)
+    logger.info("All examples completed!")
 
 
 if __name__ == "__main__":
