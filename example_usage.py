@@ -15,6 +15,10 @@ from http_service import (
     CircuitBreakerConfig,
     CircuitBreakerOpenError,
     extract_rate_limit_info,
+    bulkhead,
+    Bulkhead,
+    AsyncBulkhead,
+    BulkheadConfig,
 )
 
 # Configure logging
@@ -532,6 +536,128 @@ def example_multiple_expected_exceptions():
     client.close()
 
 
+def example_comprehensive_resilience():
+    """Example: circuit breaker + bulkhead + rate limit + retry + pooling.
+
+    Demonstrates a single client configured with multiple resiliency features,
+    while bulkhead limits concurrency around the request function.
+    """
+    logger.info("\n=== Comprehensive Resilience Example ===")
+
+    client = HttpClient(
+        base_url="https://jsonplaceholder.typicode.com",
+        # Retry
+        max_retries=3,
+        retry_delay=0.5,
+        backoff_factor=2.0,
+        # Rate limiting
+        rate_limit_requests_per_second=5.0,
+        # Connection pooling
+        max_connections=20,
+        max_keepalive_connections=10,
+        keepalive_expiry=30.0,
+        # Circuit breaker
+        circuit_breaker_enabled=True,
+        circuit_breaker_failure_threshold=3,
+        circuit_breaker_recovery_timeout=5.0,
+        circuit_breaker_failure_status_codes=[500, 502, 503, 504],
+        circuit_breaker_success_threshold=1,
+    )
+
+    @bulkhead(max_concurrent=3, acquire_timeout=0.05)
+    def guarded_get(path: str):
+        return client.get(path)
+
+    for i in range(1, 7):
+        try:
+            response = guarded_get(f"/posts/{i}")
+            logger.info(f"GET /posts/{i} -> {response.status_code}")
+        except Exception as e:
+            logger.error(f"Request {i} failed: {type(e).__name__}: {e}")
+
+    client.close()
+
+
+def example_bulkhead_with_configuration():
+    """Example: using BulkheadConfig for sync and async operations."""
+    logger.info("\n=== Bulkhead With Configuration Example ===")
+
+    # Configure bulkhead (sync)
+    sync_cfg = BulkheadConfig(enabled=True, max_concurrent=2, acquire_timeout=0.05)
+    sync_bh = Bulkhead(sync_cfg)
+
+    def do_work(i: int):
+        time.sleep(0.1)
+        return f"work-{i}"
+
+    results = []
+    try:
+        with sync_bh.slot():
+            results.append(do_work(1))
+        with sync_bh.slot():
+            results.append(do_work(2))
+        logger.info(f"Sync bulkhead results: {results}")
+    except Exception as e:
+        logger.error(f"Sync bulkhead error: {e}")
+
+    # Configure bulkhead (async)
+    async_cfg = BulkheadConfig(enabled=True, max_concurrent=2, acquire_timeout=0.05)
+    async_bh = AsyncBulkhead(async_cfg)
+
+    async def async_work(i: int):
+        async with async_bh.slot():
+            await asyncio.sleep(0.1)
+            return f"awork-{i}"
+
+    async def run_async_bulkhead():
+        res = await asyncio.gather(async_work(1), async_work(2))
+        logger.info(f"Async bulkhead results: {res}")
+
+    asyncio.run(run_async_bulkhead())
+
+
+def example_comprehensive_resilience_with_bulkhead_config():
+    """Comprehensive example using BulkheadConfig for concurrency control.
+
+    Combines: circuit breaker + bulkhead (config) + rate limit + retry + pooling.
+    """
+    logger.info("\n=== Comprehensive Resilience (BulkheadConfig) Example ===")
+
+    client = HttpClient(
+        base_url="https://jsonplaceholder.typicode.com",
+        # Retry
+        max_retries=3,
+        retry_delay=0.5,
+        backoff_factor=2.0,
+        # Rate limiting
+        rate_limit_requests_per_second=5.0,
+        # Connection pooling
+        max_connections=20,
+        max_keepalive_connections=10,
+        keepalive_expiry=30.0,
+        # Circuit breaker
+        circuit_breaker_enabled=True,
+        circuit_breaker_failure_threshold=3,
+        circuit_breaker_recovery_timeout=5.0,
+        circuit_breaker_failure_status_codes=[500, 502, 503, 504],
+        circuit_breaker_success_threshold=1,
+    )
+
+    # Bulkhead via configuration
+    bh_cfg = BulkheadConfig(enabled=True, max_concurrent=3, acquire_timeout=0.05)
+    bh = Bulkhead(bh_cfg)
+
+    for i in range(1, 7):
+        try:
+            with bh.slot():
+                response = client.get(f"/posts/{i}")
+            logger.info(f"GET /posts/{i} -> {response.status_code}")
+        except Exception as e:
+            logger.error(f"Request {i} failed: {type(e).__name__}: {e}")
+
+    client.close()
+
+
 async def example_async_usage():
     """Example of async client usage."""
     logger.info("\n=== Async Usage Example ===")
@@ -694,6 +820,7 @@ def main():
     example_custom_exception_circuit_breaker_with_service()
     example_ignored_exception_circuit_breaker()
     example_multiple_expected_exceptions()
+    example_comprehensive_resilience()
     
     # Run async example
     asyncio.run(example_async_usage())

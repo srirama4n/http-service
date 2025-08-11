@@ -42,6 +42,10 @@ from .patterns.decorators import (
     retry, async_retry, rate_limit, async_rate_limit,
     log_request_response, async_log_request_response
 )
+from .patterns.bulkhead import (
+    Bulkhead, AsyncBulkhead, BulkheadConfig,
+    BulkheadRejectedError, bulkhead, async_bulkhead
+)
 
 __all__ = [
     # Core classes
@@ -86,4 +90,11 @@ __all__ = [
     "async_rate_limit",
     "log_request_response",
     "async_log_request_response",
+    # Bulkhead
+    "Bulkhead",
+    "AsyncBulkhead",
+    "BulkheadConfig",
+    "BulkheadRejectedError",
+    "bulkhead",
+    "async_bulkhead",
 ]
