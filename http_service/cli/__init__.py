@@ -7,8 +7,8 @@ import json
 import sys
 from typing import Dict, Any
 
-from .client import HttpClient
-from .config import get_config
+from ..core.client import HttpClient
+from ..core.config import get_config
 
 
 def main():

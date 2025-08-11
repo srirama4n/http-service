@@ -5,7 +5,7 @@ Unit tests for the utils module.
 import pytest
 import json
 from unittest.mock import Mock
-from http_service.utils import (
+from http_service.core.utils import (
     build_url, sanitize_headers, format_request_log, format_response_log,
     is_retryable_status_code, is_retryable_exception, merge_headers,
     create_auth_header, extract_rate_limit_info, calculate_backoff_delay,

@@ -8,7 +8,7 @@ import logging
 import threading
 from typing import Optional, Callable, Any, Dict
 from enum import Enum
-from .models import CircuitBreakerState, CircuitBreakerConfig
+from ..core.models import CircuitBreakerState, CircuitBreakerConfig
 import httpx
 
 logger = logging.getLogger(__name__)

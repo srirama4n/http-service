@@ -6,7 +6,7 @@ import pytest
 import asyncio
 import time
 from unittest.mock import Mock, patch
-from http_service.decorators import (
+from http_service.patterns.decorators import (
     retry, async_retry, rate_limit, async_rate_limit,
     log_request_response, async_log_request_response
 )
@@ -353,7 +353,7 @@ class TestAsyncRateLimitDecorator:
 class TestLogRequestResponseDecorator:
     """Test log_request_response decorator."""
     
-    @patch('http_service.decorators.logger')
+    @patch('http_service.patterns.decorators.logger')
     def test_log_request_response_success(self, mock_logger):
         """Test log_request_response decorator with successful request."""
         @log_request_response
@@ -366,7 +366,7 @@ class TestLogRequestResponseDecorator:
         # Should log request and response
         assert mock_logger.info.call_count >= 2
     
-    @patch('http_service.decorators.logger')
+    @patch('http_service.patterns.decorators.logger')
     def test_log_request_response_exception(self, mock_logger):
         """Test log_request_response decorator with exception."""
         @log_request_response
@@ -380,7 +380,7 @@ class TestLogRequestResponseDecorator:
         assert mock_logger.info.call_count >= 1
         assert mock_logger.error.call_count >= 1
     
-    @patch('http_service.decorators.logger')
+    @patch('http_service.patterns.decorators.logger')
     def test_log_request_response_disabled(self, mock_logger):
         """Test log_request_response decorator when logging is disabled."""
         @log_request_response(enable_logging=False)
@@ -399,7 +399,7 @@ class TestAsyncLogRequestResponseDecorator:
     """Test async_log_request_response decorator."""
     
     @pytest.mark.asyncio
-    @patch('http_service.decorators.logger')
+    @patch('http_service.patterns.decorators.logger')
     async def test_async_log_request_response_success(self, mock_logger):
         """Test async_log_request_response decorator with successful request."""
         @async_log_request_response
@@ -413,7 +413,7 @@ class TestAsyncLogRequestResponseDecorator:
         assert mock_logger.info.call_count >= 2
     
     @pytest.mark.asyncio
-    @patch('http_service.decorators.logger')
+    @patch('http_service.patterns.decorators.logger')
     async def test_async_log_request_response_exception(self, mock_logger):
         """Test async_log_request_response decorator with exception."""
         @async_log_request_response
@@ -428,7 +428,7 @@ class TestAsyncLogRequestResponseDecorator:
         assert mock_logger.error.call_count >= 1
     
     @pytest.mark.asyncio
-    @patch('http_service.decorators.logger')
+    @patch('http_service.patterns.decorators.logger')
     async def test_async_log_request_response_disabled(self, mock_logger):
         """Test async_log_request_response decorator when logging is disabled."""
         @async_log_request_response(enable_logging=False)
@@ -483,7 +483,7 @@ class TestDecoratorCombinations:
         assert result == "success"
         assert call_count == 3
     
-    @patch('http_service.decorators.logger')
+    @patch('http_service.patterns.decorators.logger')
     def test_retry_and_logging(self, mock_logger):
         """Test combining retry and logging decorators."""
         call_count = 0

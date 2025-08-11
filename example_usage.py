@@ -8,10 +8,14 @@ import json
 import logging
 import time
 from http_service import (
-    HttpClient, RetryConfig, TimeoutConfig, AuthConfig, CircuitBreakerConfig,
-    CircuitBreakerOpenError
+    HttpClient,
+    RetryConfig,
+    TimeoutConfig,
+    AuthConfig,
+    CircuitBreakerConfig,
+    CircuitBreakerOpenError,
+    extract_rate_limit_info,
 )
-from http_service.config import get_config, get_config_for_service
 
 # Configure logging
 logging.basicConfig(
@@ -180,19 +184,14 @@ def example_custom_circuit_breaker_config():
     """Example of custom circuit breaker configuration."""
     logger.info("\n=== Custom Circuit Breaker Configuration Example ===")
     
-    # Create custom circuit breaker configuration
-    circuit_breaker_config = CircuitBreakerConfig(
-        enabled=True,
-        failure_threshold=2,
-        recovery_timeout=5.0,
-        failure_status_codes=[500, 502, 503, 504],
-        success_threshold=1
-    )
-    
-    # Create client with custom circuit breaker
+    # Create client with custom circuit breaker parameters
     client = HttpClient(
         base_url="https://httpstat.us",
-        circuit_breaker_config=circuit_breaker_config
+        circuit_breaker_enabled=True,
+        circuit_breaker_failure_threshold=2,
+        circuit_breaker_recovery_timeout=5.0,
+        circuit_breaker_failure_status_codes=[500, 502, 503, 504],
+        circuit_breaker_success_threshold=1,
     )
     
     # Test circuit breaker behavior
@@ -365,6 +364,174 @@ def example_service_specific_configuration():
         logger.info("Make sure to set up USER_* environment variables")
 
 
+def example_custom_exception_circuit_breaker_with_service():
+    """Example: circuit breaker with custom exception and service-based config."""
+    logger.info("\n=== Circuit Breaker with Custom Exception (Service Config) ===")
+
+    # Define a custom exception that should trigger the circuit breaker
+    class UpstreamServiceError(Exception):
+        pass
+
+    # Create a client for a specific service using env (e.g., ORDER_* vars)
+    client = HttpClient.create_client_for_service("order")
+
+    # Enable circuit breaker with a custom expected exception and lower thresholds
+    client.circuit_breaker_enabled = True
+    client.circuit_breaker_failure_threshold = 2
+    client.circuit_breaker_recovery_timeout = 3.0
+    client.circuit_breaker_success_threshold = 1
+    # Include custom exception as a breaker trigger
+    client._circuit_breaker.config.expected_exception = UpstreamServiceError
+
+    # Simulate failures by raising our custom exception in a wrapped call
+    def flaky_operation():
+        raise UpstreamServiceError("Upstream dependency failed")
+
+    try:
+        # First call – failure #1
+        client._circuit_breaker.call(flaky_operation)
+    except UpstreamServiceError:
+        logger.info("Custom exception encountered (1)")
+
+    try:
+        # Second call – failure #2 (should open the breaker)
+        client._circuit_breaker.call(flaky_operation)
+    except UpstreamServiceError:
+        logger.info("Custom exception encountered (2) – breaker should open")
+
+    # Now the breaker should be OPEN; further calls should be rejected
+    try:
+        client._circuit_breaker.call(lambda: "ok")
+        logger.error("Unexpected success; breaker should have been open")
+    except CircuitBreakerOpenError as e:
+        logger.info(f"Breaker open as expected: {e}")
+
+    # Wait for half-open attempt
+    time.sleep(client.circuit_breaker_recovery_timeout + 0.1)
+
+    # Half-open trial – provide a success to close the breaker
+    try:
+        result = client._circuit_breaker.call(lambda: "success")
+        logger.info(f"Half-open success result: {result}")
+    except Exception as e:
+        logger.error(f"Unexpected error during half-open trial: {e}")
+    finally:
+        client.close()
+
+
+def example_ignored_exception_circuit_breaker():
+    """Example: exceptions ignored by the circuit breaker configuration.
+
+    Demonstrates configuring the breaker to trigger on a specific custom
+    exception while ignoring other exception types.
+    """
+    logger.info("\n=== Circuit Breaker Ignored Exception Example ===")
+
+    class UpstreamServiceError(Exception):
+        pass
+
+    class IgnoredError(Exception):
+        pass
+
+    client = HttpClient(
+        base_url="https://example.com",
+        circuit_breaker_enabled=True,
+        circuit_breaker_failure_threshold=2,
+        circuit_breaker_recovery_timeout=2.0,
+        circuit_breaker_success_threshold=1,
+        # Status-code triggers remain as defaults; we focus on exception triggers
+    )
+
+    # Configure breaker to only treat UpstreamServiceError (and timeouts) as failures
+    client._circuit_breaker.config.expected_exception = UpstreamServiceError
+
+    # Raise an exception type that should be IGNORED by the breaker
+    def operation_with_ignored_error():
+        raise IgnoredError("Non-fatal, should not trip breaker")
+
+    # Call twice; failure_count should not increment and breaker should not open
+    for i in range(2):
+        try:
+            client._circuit_breaker.call(operation_with_ignored_error)
+        except IgnoredError:
+            logger.info(f"Ignored exception observed (attempt {i+1})")
+
+    stats = client.get_circuit_breaker_stats()
+    logger.info(f"Breaker open? {client.is_circuit_breaker_open()} | failure_count={stats.get('failure_count')}")
+
+    # Now raise the expected exception to show it DOES trigger the breaker
+    def operation_with_expected_error():
+        raise UpstreamServiceError("Should count as failure")
+
+    try:
+        client._circuit_breaker.call(operation_with_expected_error)
+    except UpstreamServiceError:
+        logger.info("Expected exception recorded as failure (1)")
+
+    try:
+        client._circuit_breaker.call(operation_with_expected_error)
+    except UpstreamServiceError:
+        logger.info("Expected exception recorded as failure (2) – breaker may open")
+
+    logger.info(f"Breaker open after expected errors? {client.is_circuit_breaker_open()}")
+    client.close()
+
+
+def example_multiple_expected_exceptions():
+    """Example: circuit breaker with multiple expected exception types.
+
+    Configure the breaker so that more than one exception class will count as
+    a failure (leveraging isinstance with a tuple of exception classes).
+    """
+    logger.info("\n=== Circuit Breaker Multiple Expected Exceptions Example ===")
+
+    class UpstreamServiceError(Exception):
+        pass
+
+    class DependencyTimeoutError(Exception):
+        pass
+
+    client = HttpClient(
+        base_url="https://example.com",
+        circuit_breaker_enabled=True,
+        circuit_breaker_failure_threshold=2,
+        circuit_breaker_recovery_timeout=2.0,
+        circuit_breaker_success_threshold=1,
+    )
+
+    # Treat both exceptions as breaker-triggering failures
+    client._circuit_breaker.config.expected_exception = (
+        UpstreamServiceError,
+        DependencyTimeoutError,
+    )
+
+    def raise_upstream():
+        raise UpstreamServiceError("upstream error")
+
+    def raise_timeout():
+        raise DependencyTimeoutError("dependency timed out")
+
+    # First failure (UpstreamServiceError)
+    try:
+        client._circuit_breaker.call(raise_upstream)
+    except UpstreamServiceError:
+        logger.info("Recorded failure: UpstreamServiceError")
+
+    # Second failure (DependencyTimeoutError) – should open the breaker
+    try:
+        client._circuit_breaker.call(raise_timeout)
+    except DependencyTimeoutError:
+        logger.info("Recorded failure: DependencyTimeoutError (breaker opens)")
+
+    logger.info(f"Breaker open? {client.is_circuit_breaker_open()}")
+
+    # Half-open after timeout and then a success to close
+    time.sleep(client.circuit_breaker_recovery_timeout + 0.1)
+    result = client._circuit_breaker.call(lambda: "success")
+    logger.info(f"Half-open success result: {result}")
+    client.close()
+
+
 async def example_async_usage():
     """Example of async client usage."""
     logger.info("\n=== Async Usage Example ===")
@@ -417,7 +584,7 @@ def example_response_processing():
     response = client.get("/posts/1")
     
     # Extract rate limit info (if available)
-    rate_limit_info = client.get_rate_limit_info(response)
+    rate_limit_info = extract_rate_limit_info(response)
     if rate_limit_info:
         logger.info(f"Rate limit info: {rate_limit_info}")
     
@@ -524,6 +691,9 @@ def main():
     example_response_processing()
     example_error_handling()
     example_circuit_breaker_management()
+    example_custom_exception_circuit_breaker_with_service()
+    example_ignored_exception_circuit_breaker()
+    example_multiple_expected_exceptions()
     
     # Run async example
     asyncio.run(example_async_usage())

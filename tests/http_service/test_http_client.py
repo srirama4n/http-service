@@ -6,13 +6,13 @@ import pytest
 import asyncio
 import httpx
 from unittest.mock import Mock, patch, AsyncMock
-from http_service.client import HttpClient
-from http_service.models import (
+from http_service.core.client import HttpClient
+from models import (
     RetryConfig, TimeoutConfig, AuthConfig, CircuitBreakerConfig,
     HTTPClientSettings
 )
-from http_service.config import HTTPClientConfig
-from http_service.circuit_breaker import CircuitBreakerOpenError
+from http_service.core.config import HTTPClientConfig
+from http_service.patterns.circuit_breaker import CircuitBreakerOpenError
 
 
 class TestHttpClient:
@@ -57,7 +57,7 @@ class TestHttpClient:
         assert client.auth_type == "none"
         assert client.circuit_breaker_enabled is False
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_get_success(self, mock_client_class):
         """Test HttpClient GET request success."""
         mock_client = Mock()
@@ -74,7 +74,7 @@ class TestHttpClient:
         assert response.json() == {"message": "success"}
         mock_client.request.assert_called_once()
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_post_success(self, mock_client_class):
         """Test HttpClient POST request success."""
         mock_client = Mock()
@@ -92,7 +92,7 @@ class TestHttpClient:
         assert response.json() == {"id": 1, "name": "test"}
         mock_client.request.assert_called_once()
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_put_success(self, mock_client_class):
         """Test HttpClient PUT request success."""
         mock_client = Mock()
@@ -110,7 +110,7 @@ class TestHttpClient:
         assert response.json() == {"id": 1, "name": "updated"}
         mock_client.request.assert_called_once()
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_patch_success(self, mock_client_class):
         """Test HttpClient PATCH request success."""
         mock_client = Mock()
@@ -128,7 +128,7 @@ class TestHttpClient:
         assert response.json() == {"id": 1, "name": "patched"}
         mock_client.request.assert_called_once()
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_delete_success(self, mock_client_class):
         """Test HttpClient DELETE request success."""
         mock_client = Mock()
@@ -143,7 +143,7 @@ class TestHttpClient:
         assert response.status_code == 204
         mock_client.request.assert_called_once()
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_request_success(self, mock_client_class):
         """Test HttpClient request method success."""
         mock_client = Mock()
@@ -160,7 +160,7 @@ class TestHttpClient:
         assert response.json() == {"message": "success"}
         mock_client.request.assert_called_once()
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_with_headers(self, mock_client_class):
         """Test HttpClient with custom headers."""
         mock_client = Mock()
@@ -179,7 +179,7 @@ class TestHttpClient:
         # Headers are set at the client level, not in individual requests
         assert mock_client.request.called
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_with_auth_api_key(self, mock_client_class):
         """Test HttpClient with API key authentication."""
         mock_client = Mock()
@@ -200,7 +200,7 @@ class TestHttpClient:
         # Headers are set at the client level, not in individual requests
         assert mock_client.request.called
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_with_auth_bearer(self, mock_client_class):
         """Test HttpClient with bearer token authentication."""
         mock_client = Mock()
@@ -220,7 +220,7 @@ class TestHttpClient:
         # Headers are set at the client level, not in individual requests
         assert mock_client.request.called
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_with_auth_basic(self, mock_client_class):
         """Test HttpClient with basic authentication."""
         mock_client = Mock()
@@ -241,7 +241,7 @@ class TestHttpClient:
         # Headers are set at the client level, not in individual requests
         assert mock_client.request.called
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_retry_on_failure(self, mock_client_class):
         """Test HttpClient retry on failure."""
         mock_client = Mock()
@@ -272,7 +272,7 @@ class TestHttpClient:
         # The final response should be the successful one
         assert response.status_code == 200
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_circuit_breaker(self, mock_client_class):
         """Test HttpClient with circuit breaker."""
         mock_client = Mock()
@@ -301,7 +301,7 @@ class TestHttpClient:
         with pytest.raises(CircuitBreakerOpenError):
             client.get("/users")
     
-    @patch('http_service.client.httpx.AsyncClient')
+    @patch('http_service.core.client.httpx.AsyncClient')
     @pytest.mark.asyncio
     async def test_http_client_async_get_success(self, mock_client_class):
         """Test HttpClient async GET request success."""
@@ -319,7 +319,7 @@ class TestHttpClient:
         assert response.json() == {"message": "success"}
         mock_client.request.assert_called_once()
     
-    @patch('http_service.client.httpx.AsyncClient')
+    @patch('http_service.core.client.httpx.AsyncClient')
     @pytest.mark.asyncio
     async def test_http_client_async_post_success(self, mock_client_class):
         """Test HttpClient async POST request success."""
@@ -338,7 +338,7 @@ class TestHttpClient:
         assert response.json() == {"id": 1, "name": "test"}
         mock_client.request.assert_called_once()
     
-    @patch('http_service.client.httpx.AsyncClient')
+    @patch('http_service.core.client.httpx.AsyncClient')
     @pytest.mark.asyncio
     async def test_http_client_async_request_success(self, mock_client_class):
         """Test HttpClient async request method success."""
@@ -470,7 +470,7 @@ class TestHttpClientConvenienceFunctions:
         assert client.circuit_breaker_failure_threshold == 3
         assert client.circuit_breaker_recovery_timeout == 10.0
     
-    @patch('http_service.client.get_config')
+    @patch('http_service.core.client.get_config')
     def test_create_client_from_env(self, mock_get_config):
         """Test create_client_from_env function."""
         mock_config = HTTPClientConfig(
@@ -485,7 +485,7 @@ class TestHttpClientConvenienceFunctions:
         assert client.api_key == "env-key"
         mock_get_config.assert_called_once()
     
-    @patch('http_service.client.get_config_for_service')
+    @patch('http_service.core.client.get_config_for_service')
     def test_create_client_for_service(self, mock_get_config_for_service):
         """Test create_client_for_service function."""
         mock_config = HTTPClientConfig(
@@ -504,7 +504,7 @@ class TestHttpClientConvenienceFunctions:
 class TestHttpClientErrorHandling:
     """Test HttpClient error handling."""
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_connection_error(self, mock_client_class):
         """Test HttpClient connection error handling."""
         import httpx
@@ -518,7 +518,7 @@ class TestHttpClientErrorHandling:
         with pytest.raises(httpx.ConnectError):
             client.get("/users")
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_timeout_error(self, mock_client_class):
         """Test HttpClient timeout error handling."""
         import httpx
@@ -532,7 +532,7 @@ class TestHttpClientErrorHandling:
         with pytest.raises(httpx.TimeoutException):
             client.get("/users")
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_http_status_error(self, mock_client_class):
         """Test HttpClient HTTP status error handling."""
         import httpx
@@ -549,7 +549,7 @@ class TestHttpClientErrorHandling:
         response = client.get("/users")
         assert response.status_code == 404
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_http_client_raise_for_status(self, mock_client_class):
         """Test HttpClient with raise_for_status enabled."""
         import httpx

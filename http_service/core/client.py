@@ -18,12 +18,12 @@ from .models import (
     RetryConfig, TimeoutConfig, AuthConfig, CircuitBreakerConfig,
     HTTPClientSettings
 )
-from .circuit_breaker import CircuitBreaker, CircuitBreakerOpenError, should_trigger_circuit_breaker
+from ..patterns.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError, should_trigger_circuit_breaker
 from .utils import (
     build_url, sanitize_headers, format_request_log, format_response_log,
     merge_headers, create_auth_header
 )
-from .decorators import retry, async_retry, rate_limit, async_rate_limit
+from ..patterns.decorators import retry, async_retry, rate_limit, async_rate_limit
 
 logger = logging.getLogger(__name__)
 

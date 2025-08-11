@@ -6,16 +6,16 @@ import pytest
 import asyncio
 import time
 from unittest.mock import Mock, patch, AsyncMock
-from http_service.client import HttpClient
-from http_service.models import CircuitBreakerConfig
-from http_service.config import HTTPClientConfig
-from http_service.circuit_breaker import CircuitBreakerOpenError
+from http_service.core.client import HttpClient
+from models import CircuitBreakerConfig
+from http_service.core.config import HTTPClientConfig
+from http_service.patterns.circuit_breaker import CircuitBreakerOpenError
 
 
 class TestHttpClientIntegration:
     """Integration tests for HttpClient."""
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_full_http_client_workflow(self, mock_client_class):
         """Test complete HTTP client workflow with all features."""
         # Setup mock responses
@@ -86,7 +86,7 @@ class TestHttpClientIntegration:
         client.reset_circuit_breaker()
         assert client.is_circuit_breaker_closed()
     
-    @patch('http_service.client.httpx.AsyncClient')
+    @patch('http_service.core.client.httpx.AsyncClient')
     @pytest.mark.asyncio
     async def test_full_async_http_client_workflow(self, mock_client_class):
         """Test complete async HTTP client workflow."""
@@ -169,7 +169,7 @@ class TestHttpClientIntegration:
             assert client.auth_type == "api_key"
             assert client.circuit_breaker_enabled is True
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_retry_and_circuit_breaker_integration(self, mock_client_class):
         """Test integration between retry logic and circuit breaker."""
         import httpx
@@ -314,7 +314,7 @@ class TestHttpClientIntegration:
         assert cb_client.circuit_breaker_failure_threshold == 3
         assert cb_client.circuit_breaker_recovery_timeout == 10.0
     
-    @patch('http_service.client.get_config')
+    @patch('http_service.core.client.get_config')
     def test_environment_client_creation_integration(self, mock_get_config):
         """Test integration of environment-based client creation."""
         mock_config = HTTPClientConfig(
@@ -331,7 +331,7 @@ class TestHttpClientIntegration:
         assert client.auth_type == "api_key"
         mock_get_config.assert_called_once()
     
-    @patch('http_service.client.get_config_for_service')
+    @patch('http_service.core.client.get_config_for_service')
     def test_service_client_creation_integration(self, mock_get_config_for_service):
         """Test integration of service-based client creation."""
         mock_config = HTTPClientConfig(
@@ -352,7 +352,7 @@ class TestHttpClientIntegration:
 class TestErrorHandlingIntegration:
     """Integration tests for error handling."""
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_comprehensive_error_handling(self, mock_client_class):
         """Test comprehensive error handling integration."""
         import httpx
@@ -396,7 +396,7 @@ class TestErrorHandlingIntegration:
                 # Other exceptions might be raised due to retry logic
                 assert isinstance(e, (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError, httpx.RemoteProtocolError, StopIteration))
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_circuit_breaker_error_integration(self, mock_client_class):
         """Test circuit breaker error handling integration."""
         import httpx
@@ -444,7 +444,7 @@ class TestErrorHandlingIntegration:
 class TestPerformanceIntegration:
     """Integration tests for performance features."""
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_connection_pooling_integration(self, mock_client_class):
         """Test connection pooling integration."""
         mock_client = Mock()
@@ -471,7 +471,7 @@ class TestPerformanceIntegration:
         assert call_args["limits"].max_connections == 10
         assert call_args["limits"].max_keepalive_connections == 5
     
-    @patch('http_service.client.httpx.Client')
+    @patch('http_service.core.client.httpx.Client')
     def test_timeout_integration(self, mock_client_class):
         """Test timeout configuration integration."""
         mock_client = Mock()

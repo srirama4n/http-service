@@ -4,7 +4,7 @@ Unit tests for the models module.
 
 import pytest
 import httpx
-from http_service.models import (
+from models import (
     RetryConfig, TimeoutConfig, AuthConfig, CircuitBreakerConfig,
     ConnectionPoolConfig, RateLimitConfig, LoggingConfig, HTTPClientSettings,
     CircuitBreakerState

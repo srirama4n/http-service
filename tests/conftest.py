@@ -7,11 +7,11 @@ import asyncio
 from unittest.mock import Mock, patch
 from typing import Dict, Any
 
-from http_service.models import (
+from models import (
     RetryConfig, TimeoutConfig, AuthConfig, CircuitBreakerConfig,
     ConnectionPoolConfig, RateLimitConfig, LoggingConfig
 )
-from http_service.config import HTTPClientConfig
+from http_service.core.config import HTTPClientConfig
 
 
 @pytest.fixture

@@ -6,11 +6,11 @@ import pytest
 import time
 import threading
 from unittest.mock import Mock, patch
-from http_service.circuit_breaker import (
+from http_service.patterns.circuit_breaker import (
     CircuitBreaker, CircuitBreakerOpenError,
     should_trigger_circuit_breaker
 )
-from http_service.models import CircuitBreakerState, CircuitBreakerConfig
+from models import CircuitBreakerState, CircuitBreakerConfig
 
 
 class TestCircuitBreaker:

@@ -721,99 +721,147 @@ logging.basicConfig(level=logging.DEBUG)
 
 ## 📚 Examples
 
-See `example_usage.py` for comprehensive examples of all features including:
+This section focuses on two practical circuit breaker examples. For full examples, see `example_usage.py`.
 
-- Basic usage
-- Authentication examples
-- Retry configuration
-- Rate limiting
-- Circuit breaker patterns
-- Async usage
-- Error handling
-- Service-specific configuration
-
-### Real-World Application Example
-
-Here's how to use the HTTP client in a real application:
+### Circuit Breaker with Custom Exception (Service Config)
 
 ```python
-# app.py
-import os
-from http_service import HttpClient
-from http_service.utils import build_url, create_auth_header
+import time
+from http_service import HttpClient, CircuitBreakerOpenError
 
-class UserService:
-    def __init__(self):
-        # Create client with environment configuration
-        self.client = HttpClient.create_client_for_service("user")
-    
-    def get_user(self, user_id: int):
-        """Get user by ID with retry and circuit breaker protection."""
-        try:
-            response = self.client.get(f"/users/{user_id}")
-            return response.json()
-        except Exception as e:
-            print(f"Error fetching user {user_id}: {e}")
-            return None
-    
-    def create_user(self, user_data: dict):
-        """Create user with authentication."""
-        try:
-            response = self.client.post("/users", json=user_data)
-            return response.json()
-        except Exception as e:
-            print(f"Error creating user: {e}")
-            return None
+# Create a client from service-specific environment variables (e.g., ORDER_*)
+client = HttpClient.create_client_for_service("order")
 
-class OrderService:
-    def __init__(self):
-        # Create client with different configuration
-        self.client = HttpClient.create_client_for_service("order")
-    
-    async def get_orders(self, user_id: int):
-        """Get user orders asynchronously."""
-        try:
-            response = await self.client.aget(f"/orders?user_id={user_id}")
-            return response.json()
-        except Exception as e:
-            print(f"Error fetching orders for user {user_id}: {e}")
-            return []
+# Define a custom exception that should trip the circuit breaker
+class UpstreamServiceError(Exception):
+    pass
 
-# Usage in your application
-def main():
-    # Initialize services
-    user_service = UserService()
-    order_service = OrderService()
-    
-    # Get user
-    user = user_service.get_user(123)
-    if user:
-        print(f"User: {user['name']}")
-    
-    # Get orders asynchronously
-    import asyncio
-    orders = asyncio.run(order_service.get_orders(123))
-    print(f"Orders: {len(orders)}")
+# Enable and tune the breaker
+client.circuit_breaker_enabled = True
+client.circuit_breaker_failure_threshold = 2
+client.circuit_breaker_recovery_timeout = 3.0
+client.circuit_breaker_success_threshold = 1
 
-if __name__ == "__main__":
-    main()
+# Make the breaker treat the custom exception as a failure
+client._circuit_breaker.config.expected_exception = UpstreamServiceError
+
+def flaky_operation():
+    raise UpstreamServiceError("Upstream dependency failed")
+
+# Two failures will OPEN the breaker
+for _ in range(2):
+    try:
+        client._circuit_breaker.call(flaky_operation)
+    except UpstreamServiceError:
+        pass
+
+# Breaker should now be open and reject calls
+try:
+    client._circuit_breaker.call(lambda: "ok")
+except CircuitBreakerOpenError:
+    print("Breaker open as expected")
+
+# Wait for recovery timeout; first success closes the breaker
+time.sleep(client.circuit_breaker_recovery_timeout + 0.1)
+result = client._circuit_breaker.call(lambda: "success")
+print(result)
+client.close()
 ```
 
-### Environment Configuration for the Example
+### Circuit Breaker Ignoring Non-critical Exceptions
 
-```env
-# .env file
-USER_BASE_URL=https://user-api.example.com
-USER_API_KEY=your-user-api-key
-USER_AUTH_TYPE=api_key
-USER_MAX_RETRIES=3
-USER_CIRCUIT_BREAKER_ENABLED=true
+```python
+from http_service import HttpClient
 
-ORDER_BASE_URL=https://order-api.example.com
-ORDER_TOKEN=your-order-bearer-token
-ORDER_AUTH_TYPE=bearer
-ORDER_MAX_RETRIES=5
-ORDER_RATE_LIMIT_RPS=10.0
+class UpstreamServiceError(Exception):
+    pass
+
+class IgnoredError(Exception):
+    pass
+
+client = HttpClient(
+    base_url="https://example.com",
+    circuit_breaker_enabled=True,
+    circuit_breaker_failure_threshold=2,
+    circuit_breaker_recovery_timeout=2.0,
+    circuit_breaker_success_threshold=1,
+)
+
+# Configure breaker to only treat UpstreamServiceError as a failure
+client._circuit_breaker.config.expected_exception = UpstreamServiceError
+
+# These errors are ignored by the breaker (will not open)
+def operation_with_ignored_error():
+    raise IgnoredError("Non-fatal, should not trip breaker")
+
+for _ in range(2):
+    try:
+        client._circuit_breaker.call(operation_with_ignored_error)
+    except IgnoredError:
+        pass
+
+print("Breaker open?", client.is_circuit_breaker_open())  # Expect False
+
+# Now raise the expected exception to trigger failures
+def operation_with_expected_error():
+    raise UpstreamServiceError("Should count as failure")
+
+for _ in range(2):
+    try:
+        client._circuit_breaker.call(operation_with_expected_error)
+    except UpstreamServiceError:
+        pass
+
+print("Breaker open after expected errors?", client.is_circuit_breaker_open())
+client.close()
+
+### Circuit Breaker with Multiple Expected Exceptions
+
+```python
+import time
+from http_service import HttpClient
+
+class UpstreamServiceError(Exception):
+    pass
+
+class DependencyTimeoutError(Exception):
+    pass
+
+client = HttpClient(
+    base_url="https://example.com",
+    circuit_breaker_enabled=True,
+    circuit_breaker_failure_threshold=2,
+    circuit_breaker_recovery_timeout=2.0,
+    circuit_breaker_success_threshold=1,
+)
+
+# Treat multiple exceptions as breaker-triggering failures
+client._circuit_breaker.config.expected_exception = (
+    UpstreamServiceError,
+    DependencyTimeoutError,
+)
+
+def raise_upstream():
+    raise UpstreamServiceError("upstream error")
+
+def raise_timeout():
+    raise DependencyTimeoutError("dependency timed out")
+
+try:
+    client._circuit_breaker.call(raise_upstream)
+except UpstreamServiceError:
+    pass
+
+try:
+    client._circuit_breaker.call(raise_timeout)
+except DependencyTimeoutError:
+    pass
+
+print("Breaker open?", client.is_circuit_breaker_open())
+time.sleep(client.circuit_breaker_recovery_timeout + 0.1)
+print(client._circuit_breaker.call(lambda: "success"))
+client.close()
+```
 ```
 
 ## 🧪 Testing

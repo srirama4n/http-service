@@ -5,7 +5,7 @@ Unit tests for the config module.
 import os
 import pytest
 from unittest.mock import patch, mock_open
-from http_service.config import HTTPClientConfig, get_config, get_config_for_service
+from http_service.core.config import HTTPClientConfig, get_config, get_config_for_service
 
 
 class TestHTTPClientConfig:
@@ -275,7 +275,7 @@ class TestHTTPClientConfigFromEnv:
 class TestGetConfig:
     """Test get_config function."""
     
-    @patch('http_service.config.HTTPClientConfig.from_env')
+    @patch('http_service.core.config.HTTPClientConfig.from_env')
     def test_get_config(self, mock_from_env):
         """Test get_config function."""
         mock_config = HTTPClientConfig(base_url="https://api.example.com")
@@ -310,7 +310,7 @@ class TestGetConfigForService:
         'USER_CIRCUIT_BREAKER_SUCCESS_THRESHOLD': '1',
         'USER_HEADER_X_CUSTOM': 'user-custom-value'
     })
-    @patch('http_service.config.HTTPClientConfig.from_env')
+    @patch('http_service.core.config.HTTPClientConfig.from_env')
     def test_get_config_for_service_with_user_prefix(self, mock_from_env):
         """Test get_config_for_service with USER_ prefix."""
         base_config = HTTPClientConfig()
@@ -342,7 +342,7 @@ class TestGetConfigForService:
         'ORDER_TOKEN': 'order-token',
         'ORDER_AUTH_TYPE': 'bearer'
     })
-    @patch('http_service.config.HTTPClientConfig.from_env')
+    @patch('http_service.core.config.HTTPClientConfig.from_env')
     def test_get_config_for_service_with_order_prefix(self, mock_from_env):
         """Test get_config_for_service with ORDER_ prefix."""
         base_config = HTTPClientConfig()
@@ -359,7 +359,7 @@ class TestGetConfigForService:
         'PAYMENT_USERNAME': 'payment-user',
         'PAYMENT_PASSWORD': 'payment-pass'
     })
-    @patch('http_service.config.HTTPClientConfig.from_env')
+    @patch('http_service.core.config.HTTPClientConfig.from_env')
     def test_get_config_for_service_with_payment_prefix(self, mock_from_env):
         """Test get_config_for_service with PAYMENT_ prefix."""
         base_config = HTTPClientConfig()
@@ -373,7 +373,7 @@ class TestGetConfigForService:
         assert result.auth_type == "basic"
     
     @patch.dict(os.environ, {}, clear=True)
-    @patch('http_service.config.HTTPClientConfig.from_env')
+    @patch('http_service.core.config.HTTPClientConfig.from_env')
     def test_get_config_for_service_with_no_service_vars(self, mock_from_env):
         """Test get_config_for_service with no service-specific variables."""
         base_config = HTTPClientConfig(
@@ -402,7 +402,7 @@ class TestGetConfigForService:
         'PARTIAL_MAX_RETRIES': '7',
         'PARTIAL_CIRCUIT_BREAKER_ENABLED': 'true'
     })
-    @patch('http_service.config.HTTPClientConfig.from_env')
+    @patch('http_service.core.config.HTTPClientConfig.from_env')
     def test_get_config_for_service_with_partial_config(self, mock_from_env):
         """Test get_config_for_service with only some service-specific variables set."""
         base_config = HTTPClientConfig(
